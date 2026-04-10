@@ -101,4 +101,3 @@ See [LICENSE](LICENSE) for the full terms.
 ---
 
 Built with care by [Paul Bratcher](https://www.linkedin.com/in/paul-bratcher/) - pay it forward. If Car Hunter helps you find your next car, tell someone else about it.
-

@@ -213,4 +213,3 @@ The builder script lives in the plugin at `${CLAUDE_PLUGIN_ROOT}/scripts/build_d
 - Composite keys (`price_location`) MUST be used for LISTING_IDS and PRICE_CHANGES to avoid duplicate location collisions
 - Dep/yr shows N/A for cars under 6 months old to avoid absurd annualised figures
 - The dashboard title comes from `profile.dashboard.title`
-

@@ -40,4 +40,3 @@ Use dotted paths consistently so the intent is obvious:
 - `profile.dashboard.theme.bg`
 
 This makes skills readable as templates rather than implementations.
-

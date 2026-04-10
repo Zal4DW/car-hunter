@@ -114,4 +114,3 @@ class TestDepreciationCurvePerVariant:
         ]
         _, linear_term, _ = fit_poly2(sport_points)
         assert linear_term < 0
-

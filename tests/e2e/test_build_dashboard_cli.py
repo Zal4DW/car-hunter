@@ -159,4 +159,3 @@ class TestBuilderFailsHelpfully:
             env=subprocess_env,
         )
         assert result.returncode != 0
-

@@ -22,4 +22,3 @@ class TestJsSafe:
     def test_serialises_empty_collections(self):
         assert json.loads(js_safe([])) == []
         assert json.loads(js_safe({})) == {}
-

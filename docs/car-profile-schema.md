@@ -138,4 +138,3 @@ This document defines the `car-profile.json` schema used by the car-hunter plugi
 - `generations` support multiple concurrent generations. The `detection_rules` allow the dashboard to classify listings automatically.
 - `reg_date_mapping` is UK-specific. For other markets, this could be replaced with a different date estimation method.
 - The `search_urls` section is designed to be extensible. AutoTrader is the primary UK source, but additional sites and dealer groups can be added per profile.
-

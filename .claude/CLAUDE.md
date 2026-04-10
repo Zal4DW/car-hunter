@@ -33,4 +33,3 @@ A Claude Code plugin for tracking UK used car listings, detecting deals via mult
 - Dated snapshots: `{profile}-all-listings-{YYYY-MM-DD}.csv` enables volatility analysis between runs.
 - No external Python libraries in `scripts/build_dashboard.py` - OLS via Gaussian elimination, Chart.js from CDN.
 - Pure maths helpers live in `scripts/dashboard_lib.py` so they can be unit-tested without running the full builder.
-

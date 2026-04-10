@@ -58,4 +58,3 @@ def spec_options(loaded_profile: dict) -> list:
 @pytest.fixture(scope="session")
 def variant_by_name(loaded_profile: dict) -> dict:
     return {v["name"]: v for v in loaded_profile["variants"]}
-

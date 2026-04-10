@@ -150,4 +150,3 @@ def build_feature_matrix(reg_rows, variant_by_name, tier_features):
         X.append(features)
         y.append(r["price"])
     return X, y
-

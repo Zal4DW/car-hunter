@@ -156,4 +156,3 @@ If a profile already exists for the requested car in `${CLAUDE_PLUGIN_DATA}/prof
 2. Show the user what's currently configured
 3. Ask which sections they want to update
 4. Merge changes and write the updated profile back to the same path
-

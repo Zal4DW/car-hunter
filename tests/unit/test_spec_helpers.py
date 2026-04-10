@@ -59,4 +59,3 @@ class TestRetainedPct:
 
     def test_full_retention_returns_one_hundred(self):
         assert retained_pct(45000, 45000) == 100.0
-

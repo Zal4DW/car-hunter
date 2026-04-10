@@ -22,4 +22,3 @@ Follow these steps:
 If $ARGUMENTS contains filter terms (e.g. "RS only", "under 60k", "blue"), apply those filters instead of the profile defaults.
 
 If $ARGUMENTS contains a car name that matches a profile, use that profile directly without asking.
-

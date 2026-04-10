@@ -37,4 +37,3 @@ class TestInvalidIds:
 
     def test_returns_none_for_month_zero(self):
         assert parse_listing_date("20250001000000") is None
-

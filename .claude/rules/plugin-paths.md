@@ -84,4 +84,3 @@ Other Claude Code plugins often get by with just `${CLAUDE_PLUGIN_ROOT}` + works
 - Profile-in-workspace means the user has to re-create it every time they cd elsewhere. Bad UX.
 - Profile-in-plugin-root means writes fail on marketplace installs and get wiped on updates. Broken.
 - Only `${CLAUDE_PLUGIN_DATA}` gives the "works from any directory, survives updates, writable" combination.
-
