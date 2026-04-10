@@ -41,7 +41,7 @@ BUILDER_TIMEOUT_SECONDS = 60
 # ── Shared builder output fixture ──────────────────────────────────────────
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture(scope="session")
 def built_html(
     tmp_path_factory: pytest.TempPathFactory,
     builder_script: Path,
@@ -49,7 +49,7 @@ def built_html(
     fixture_csv_path: Path,
     subprocess_env: dict,
 ) -> str:
-    """Run the builder once per module and return the HTML text."""
+    """Run the builder once per session and return the HTML text."""
     output_dir = tmp_path_factory.mktemp("html-structure")
     output_html = output_dir / "acme-bolt-dashboard.html"
     result = subprocess.run(
@@ -74,7 +74,7 @@ def built_html(
     return output_html.read_text()
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture(scope="session")
 def soup(built_html: str) -> BeautifulSoup:
     return BeautifulSoup(built_html, "html.parser")
 

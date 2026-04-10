@@ -7,14 +7,14 @@ A Claude Code plugin for tracking UK used car listings, detecting deals via mult
 This repository is a **Claude Code plugin marketplace**. The plugin itself lives in a subdirectory so the same-repo marketplace manifest can source it.
 
 ```text
-Car-hunter/                              # marketplace repo root
+car-hunter/                              # marketplace repo root
 ├── .claude-plugin/marketplace.json      # marketplace manifest (points at ./car-hunter)
 ├── .claude/                             # repo-level dev rules (loaded by Claude Code)
 ├── .github/workflows/test.yml           # CI (pytest + coverage)
 ├── tests/                               # pytest harness (not shipped)
 ├── pyproject.toml, Makefile             # dev tooling
 ├── README.md, LICENSE                   # repo-level docs
-└── car-hunter/                          # THE PLUGIN (shipped via marketplace)
+└── car-hunter/                          # THE PLUGIN subdir (shipped via marketplace)
     ├── .claude-plugin/plugin.json       # plugin manifest
     ├── commands/                        # slash commands
     ├── skills/                          # SKILL.md files
