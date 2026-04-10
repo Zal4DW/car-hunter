@@ -1,0 +1,21 @@
+[project]
+name = "car-hunter-tests"
+version = "0.0.0"
+description = "Test harness for the Car Hunter Claude Code plugin. Not shipped with the plugin."
+requires-python = ">=3.9"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = [
+    "-ra",
+    "--strict-markers",
+    "--tb=short",
+]
+markers = [
+    "unit: fast, isolated tests of pure functions in dashboard_lib",
+    "integration: tests that combine multiple lib functions against fixtures",
+    "e2e: tests that invoke build_dashboard.py as a subprocess",
+]

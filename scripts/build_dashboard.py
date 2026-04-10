@@ -18,7 +18,23 @@ import csv
 import json
 import math
 import os
+import sys
 from datetime import date
+
+# Pure functions live in dashboard_lib so they can be unit-tested without
+# running the whole builder.
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from dashboard_lib import (  # noqa: E402
+    parse_listing_date,
+    ols_regression,
+    fit_poly2,
+    js_safe,
+    spec_labels as _spec_labels,
+    spec_score as _spec_score,
+    get_tier_value as _get_tier_value,
+    retained_pct as _retained_pct,
+    build_feature_matrix,
+)
 
 # ── Argument parsing ────────────────────────────────────────────────
 
@@ -111,11 +127,7 @@ with open(args.csv, "r") as f:
         # Options count
         row["options_count"] = int(r.get("options_count", 0))
 
-        # Retained percentage
-        if row["new_price"] > 0:
-            row["retained_pct"] = round((row["price"] / row["new_price"]) * 100, 1)
-        else:
-            row["retained_pct"] = 0
+        row["retained_pct"] = _retained_pct(row["price"], row["new_price"])
 
         rows.append(row)
 
@@ -140,19 +152,6 @@ PRICE_CHANGES = {
 
 # ── Composite keys and listing tracking ─────────────────────────────
 
-def parse_listing_date(listing_id):
-    """Extract YYYYMMDD from first 8 digits of listing ID."""
-    if not listing_id or len(listing_id) < 8:
-        return None
-    ds = listing_id[:8]
-    try:
-        y, m, d = int(ds[:4]), int(ds[4:6]), int(ds[6:8])
-        if d > 31 or m > 12:
-            return None
-        return date(y, m, d)
-    except (ValueError, IndexError):
-        return None
-
 for row in rows:
     key = f"{row['price']}_{row['location']}"
     row["composite_key"] = key
@@ -170,22 +169,10 @@ for row in rows:
 
 # ── Spec labels and scores ──────────────────────────────────────────
 
-def spec_labels(row):
-    labels = []
-    for spec in SPEC_OPTIONS:
-        if row.get(spec["key"]):
-            labels.append(spec["label"])
-    return labels
-
 for row in rows:
-    row["spec_labels"] = spec_labels(row)
+    row["spec_labels"] = _spec_labels(row, SPEC_OPTIONS)
     row["spec_text"] = ", ".join(row["spec_labels"]) if row["spec_labels"] else "Base"
-
-    # Numeric spec score for regression (weighted)
-    row["spec_score"] = sum(
-        (1 if row.get(spec["key"]) else 0) * spec["weight"]
-        for spec in SPEC_OPTIONS
-    )
+    row["spec_score"] = _spec_score(row, SPEC_OPTIONS)
 
 # ── Determine variant tier features ─────────────────────────────────
 # Build a list of tier feature names for tiers > 0
@@ -208,75 +195,12 @@ reg_data = [r for r in rows if not r["is_brand_new_stock"] and r["age_years"] >=
 print(f"Regression on {len(reg_data)} used listings (age >= 6 months)")
 
 
-def ols_regression(X, y):
-    """Simple OLS via normal equations: b = (X'X)^-1 X'y"""
-    n = len(y)
-    k = len(X[0])
-
-    # X'X
-    XtX = [[0.0] * k for _ in range(k)]
-    for i in range(n):
-        for j in range(k):
-            for l in range(k):
-                XtX[j][l] += X[i][j] * X[i][l]
-
-    # X'y
-    Xty = [0.0] * k
-    for i in range(n):
-        for j in range(k):
-            Xty[j] += X[i][j] * y[i]
-
-    # Gaussian elimination with partial pivoting
-    aug = [XtX[i][:] + [Xty[i]] for i in range(k)]
-    for col in range(k):
-        max_row = max(range(col, k), key=lambda r: abs(aug[r][col]))
-        aug[col], aug[max_row] = aug[max_row], aug[col]
-        pivot = aug[col][col]
-        if abs(pivot) < 1e-12:
-            continue
-        for j in range(col, k + 1):
-            aug[col][j] /= pivot
-        for row_idx in range(k):
-            if row_idx == col:
-                continue
-            factor = aug[row_idx][col]
-            for j in range(col, k + 1):
-                aug[row_idx][j] -= factor * aug[col][j]
-
-    coeffs = [aug[i][k] for i in range(k)]
-
-    # R-squared
-    y_mean = sum(y) / n
-    ss_tot = sum((yi - y_mean) ** 2 for yi in y)
-    ss_res = sum(
-        (y[i] - sum(X[i][j] * coeffs[j] for j in range(k))) ** 2
-        for i in range(n)
-    )
-    r_squared = 1 - ss_res / ss_tot if ss_tot > 0 else 0
-
-    return coeffs, r_squared
-
-
-def get_tier_value(row):
-    """Return the tier number for a row's variant, or 0 if not found."""
-    v = VARIANT_BY_NAME.get(row["variant"])
-    return v["tier"] if v else 0
-
-
 # Build feature matrix: [intercept, age_months, mileage, spec_score, tier_1, tier_2, ...]
 feature_names = ["intercept", "age_months", "mileage", "spec_score"] + [
     tf["name"] for tf in tier_features
 ]
 
-X = []
-y = []
-for r in reg_data:
-    tier = get_tier_value(r)
-    features = [1, r["age_months"], r["mileage"], r["spec_score"]]
-    for tf in tier_features:
-        features.append(1 if tier == tf["tier"] else 0)
-    X.append(features)
-    y.append(r["price"])
+X, y = build_feature_matrix(reg_data, VARIANT_BY_NAME, tier_features)
 
 if len(X) >= len(feature_names):
     coeffs, r_squared = ols_regression(X, y)
@@ -290,7 +214,7 @@ else:
 
 # Predict and compute residuals for ALL used cars
 for r in rows:
-    tier = get_tier_value(r)
+    tier = _get_tier_value(r, VARIANT_BY_NAME)
     features = [1, r["age_months"], r["mileage"], r["spec_score"]]
     for tf in tier_features:
         features.append(1 if tier == tf["tier"] else 0)
@@ -350,14 +274,6 @@ for r in rows:
     })
 
 
-def fit_poly2(points):
-    """Fit y = a + bx + cx^2 via normal equations."""
-    X = [[1, p["age_months"], p["age_months"] ** 2] for p in points]
-    y = [p["price"] for p in points]
-    c, _ = ols_regression(X, y)
-    return c
-
-
 dep_curves = {}
 for variant, points in dep_curve_data.items():
     if len(points) < 5:
@@ -399,11 +315,6 @@ for v, d in dep_curves.items():
         print(f"\n{v}: no clear flattening point")
 
 # ── Serialise data for JS ───────────────────────────────────────────
-
-
-def js_safe(obj):
-    """JSON serialise with handling for None."""
-    return json.dumps(obj, default=str)
 
 
 # Table data (all used cars, sorted by value_deviation ascending)

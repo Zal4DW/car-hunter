@@ -1,0 +1,138 @@
+{
+  "profile_name": "acme-bolt",
+  "display_name": "Acme Bolt EV",
+  "make": "Acme",
+  "fuel_type": "Electric",
+
+  "variants": [
+    {
+      "name": "Bolt Base",
+      "tier": 0,
+      "colour": {
+        "border": "#3b82f6",
+        "bg": "rgba(59,130,246,0.15)",
+        "point": "#3b82f6"
+      },
+      "autotrader_model": "Bolt",
+      "standard_specs": []
+    },
+    {
+      "name": "Bolt Sport",
+      "tier": 1,
+      "colour": {
+        "border": "#ef4444",
+        "bg": "rgba(239,68,68,0.15)",
+        "point": "#ef4444"
+      },
+      "autotrader_model": "Bolt",
+      "standard_specs": ["has_heated_seats"]
+    }
+  ],
+
+  "generations": [
+    {
+      "name": "mk1",
+      "label": "Mk1 (2020-present)",
+      "year_from": 2020,
+      "year_to": null,
+      "detection_rules": {
+        "battery_kwh": 75,
+        "max_reg": null,
+        "min_reg": "20"
+      },
+      "new_prices": {
+        "Bolt Base": 45000,
+        "Bolt Sport": 58000
+      }
+    }
+  ],
+
+  "spec_options": [
+    {
+      "key": "has_sunroof",
+      "label": "Panoramic Sunroof",
+      "search_terms": ["sunroof", "panoramic roof"],
+      "weight": 1,
+      "highlight": true
+    },
+    {
+      "key": "has_premium_audio",
+      "label": "Premium Audio",
+      "search_terms": ["premium audio", "harman kardon"],
+      "weight": 2,
+      "highlight": true
+    },
+    {
+      "key": "has_heated_seats",
+      "label": "Heated Seats",
+      "search_terms": ["heated seats"],
+      "weight": 1,
+      "highlight": false
+    }
+  ],
+
+  "search_filters": {
+    "postcode": "AB1 2CD",
+    "location_description": "Testville (synthetic)",
+    "max_price": 60000,
+    "max_mileage": 60000,
+    "min_year": 2020,
+    "max_distance": 200,
+    "exclude_write_offs": true
+  },
+
+  "search_urls": {
+    "autotrader": {
+      "base": "https://example.invalid/search",
+      "params": {
+        "make": "Acme",
+        "fuel-type": "Electric",
+        "sort": "price-asc"
+      }
+    },
+    "additional_sites": [],
+    "dealer_groups": []
+  },
+
+  "listing_id_date_encoding": {
+    "enabled": false,
+    "source": "",
+    "format": ""
+  },
+
+  "reg_date_mapping": {
+    "20": 2020.25,
+    "70": 2020.75,
+    "21": 2021.25,
+    "71": 2021.75,
+    "22": 2022.25,
+    "72": 2022.75,
+    "23": 2023.25,
+    "73": 2023.75,
+    "24": 2024.25,
+    "74": 2024.75,
+    "25": 2025.25,
+    "75": 2025.75
+  },
+
+  "dashboard": {
+    "title": "Acme Bolt EV - Buyer Intelligence",
+    "theme": {
+      "bg": "#0f1117",
+      "card_bg": "#1a1a2e",
+      "card_border": "#2a2a3e",
+      "text": "#e4e4e7",
+      "text_muted": "#9ca3af"
+    },
+    "mileage_filter_options": [10000, 20000, 30000, 50000],
+    "mileage_filter_default": 30000,
+    "budget_filter_options": [40000, 50000, 60000],
+    "budget_filter_default": 50000
+  },
+
+  "metadata": {
+    "created": "2026-04-10",
+    "updated": "2026-04-10",
+    "version": "1.0.0"
+  }
+}
