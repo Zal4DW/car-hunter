@@ -1,0 +1,252 @@
+# yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
+# CodeRabbit Configuration - Car Hunter Claude Code Plugin
+# https://docs.coderabbit.ai/reference/configuration
+#
+# Profile: chill (not assertive) - we use detailed path_instructions instead.
+# Assertive generates nitpicky style feedback that contradicts our intentional
+# conventions (bare code blocks, hyphens over dashes, SKILL.md as executable config).
+
+language: en-GB
+early_access: true
+
+reviews:
+  profile: chill
+  high_level_summary: true
+  collapse_walkthrough: true
+  changed_files_summary: true
+  poem: false
+  assess_linked_issues: true
+  related_issues: true
+  related_prs: true
+  suggested_labels: true
+  suggested_reviewers: true
+
+  auto_review:
+    enabled: true
+    drafts: false
+    ignore_title_keywords:
+      - "WIP"
+      - "DO NOT MERGE"
+      - "draft"
+
+  path_filters:
+    - "!**/htmlcov/**"
+    - "!**/.pytest_cache/**"
+    - "!**/__pycache__/**"
+    - "!**/*.pyc"
+    - "!**/.coverage"
+    - "!**/.coverage.*"
+    - "!**/coverage.xml"
+    - "!**/*-searches/**"
+
+  finishing_touches:
+    docstrings:
+      enabled: true
+    unit_tests:
+      enabled: true
+
+  tools:
+    markdownlint:
+      enabled: true
+    shellcheck:
+      enabled: true
+    ruff:
+      enabled: true
+    yamllint:
+      enabled: true
+    gitleaks:
+      enabled: true
+    actionlint:
+      enabled: true
+
+  # Path-specific review instructions.
+  # These align with rules in .claude/rules/ and prevent review comments
+  # that contradict our intentional conventions.
+  path_instructions:
+
+    # --- All markdown (skills, commands, rules, docs) ---
+    - path: "**/*.md"
+      instructions: |
+        IMPORTANT CONTEXT: This is a Claude Code plugin. Many .md files are
+        executable configuration (SKILL.md, command definitions, rules that
+        Claude reads at runtime) - NOT prose documentation. Apply config
+        review standards, not prose linting.
+
+        UK ENGLISH: Mandatory. Flag US spellings (organization, behavior,
+        color, analyze, center, program, optimize) UNLESS they appear inside
+        code identifiers, URLs, or library names (e.g. Python's `color`
+        parameter in Chart.js config is fine).
+
+        PUNCTUATION: Do NOT flag the absence of em dashes or en dashes. This
+        project uses hyphens and commas deliberately per .claude/rules/uk-english.md.
+        Do not suggest converting ASCII hyphens to Unicode dashes.
+
+        BARE CODE BLOCKS: Bare fenced code blocks (without a language
+        identifier) are acceptable in SKILL.md and command files - they
+        represent configuration shapes or path examples, not source code.
+        Only flag a missing language identifier if the block contains real
+        source code (Python, JSON, YAML, Bash) that would benefit from
+        syntax highlighting.
+
+    # --- SKILL.md files specifically ---
+    - path: "skills/**/SKILL.md"
+      instructions: |
+        SKILL.md is the primary configuration file for Claude Code skills.
+        YAML frontmatter followed by markdown instructions.
+
+        Valid frontmatter fields: name, description, version, context,
+        allowed-tools. The `model`, `context: fork`, and `allowed-tools`
+        (array or comma-separated string) fields are all valid per the
+        Claude Code docs - do NOT flag them as unknown.
+
+        Rules per .claude/rules/skill-frontmatter.md:
+        - name: must be kebab-case matching the folder name
+        - description: must include trigger phrases users will type;
+          max 1024 characters
+        - Do NOT add usage or tags fields (those belong on commands, not
+          skills - skills use model-based activation)
+
+        Do NOT flag:
+        - Missing docstrings (SKILL.md is not a code module)
+        - Imperative tone in instructions (intentional for LLM prompting)
+        - Bare code blocks in instruction sections
+        - `${CLAUDE_PLUGIN_ROOT}` and `${CLAUDE_PLUGIN_DATA}` as
+          "undefined variables" - they are provided by Claude Code at
+          runtime and substituted inline in skill content
+
+    # --- Slash command files ---
+    - path: "commands/*.md"
+      instructions: |
+        Slash command files. YAML frontmatter (description, allowed-tools)
+        followed by natural-language instructions for Claude to follow.
+
+        `${CLAUDE_PLUGIN_ROOT}` and `${CLAUDE_PLUGIN_DATA}` are Claude-Code
+        -provided environment variables, not undefined shell vars. They are
+        substituted inline. Do not suggest escaping them or defining them
+        in a .env file.
+
+        The `allowed-tools` field restricts Claude's available tools while
+        the command runs. Valid values include Read, Write, Edit, Glob,
+        Grep, Bash, WebSearch, WebFetch, AskUserQuestion, and MCP tool
+        patterns like `mcp__Claude_in_Chrome__*`.
+
+    # --- Profile storage guidance ---
+    - path: "{skills,commands}/**/*.md"
+      instructions: |
+        PATH CONVENTIONS: Car Hunter uses three distinct storage locations:
+        1. `${CLAUDE_PLUGIN_ROOT}` - bundled, read-only (scripts, skill
+           files, bundled docs). Wiped on every plugin update.
+        2. `${CLAUDE_PLUGIN_DATA}` - per-user writable state that survives
+           updates. Profiles MUST live here, not in PLUGIN_ROOT.
+        3. User's workspace - project artefacts (search reports, CSVs,
+           dashboard HTML).
+
+        FLAG any write to `${CLAUDE_PLUGIN_ROOT}/profiles/` - that location
+        is read-only on marketplace installs.
+
+        FLAG any profile read from `${CLAUDE_PLUGIN_ROOT}/profiles/`.
+        Profiles live under `${CLAUDE_PLUGIN_DATA}/profiles/`.
+
+        FLAG any dashboard/CSV/report write under `${CLAUDE_PLUGIN_DATA}` -
+        those are user-visible artefacts and belong in the workspace under
+        `{profile_name}-searches/`.
+
+    # --- Python source ---
+    - path: "scripts/*.py"
+      instructions: |
+        Python code targets Python >= 3.9 (see .github/workflows/test.yml
+        matrix: 3.9, 3.11, 3.12). Do not suggest features only available in
+        3.10+ (no structural pattern matching, no `X | Y` union syntax in
+        annotations, no ParamSpec without `from __future__ import annotations`).
+
+        The builder is intentionally stdlib-only - no numpy, pandas, scipy,
+        jinja2, or other external dependencies. The OLS regression is
+        implemented manually via Gaussian elimination. Do NOT suggest
+        replacing it with `numpy.linalg.lstsq` or `sklearn.linear_model`.
+        The zero-dependency constraint is load-bearing: it lets the plugin
+        run inside Claude Cowork without any pip install step.
+
+        dashboard_lib.py contains pure functions for testability.
+        build_dashboard.py is the orchestration script with top-level
+        code (argparse, file I/O, HTML template). Do not suggest wrapping
+        build_dashboard.py in a `main()` function unless you also update
+        every test that invokes it as a subprocess.
+
+    # --- Tests ---
+    - path: "tests/**/*.py"
+      instructions: |
+        Tests are organised by layer:
+        - tests/unit/ - pure function tests that import from dashboard_lib
+        - tests/integration/ - multi-function tests against fixtures
+        - tests/e2e/ - subprocess invocations of build_dashboard.py
+
+        The `tests/coverage_support/sitecustomize.py` file is deliberate -
+        it bootstraps subprocess coverage via COVERAGE_PROCESS_START. Do
+        not suggest removing it or inlining it elsewhere.
+
+        Test classes use the `Test` prefix convention. Empty `__init__.py`
+        files in each layer directory are intentional (namespace packages
+        would also work but explicit init files play nicer with some
+        editors and coverage tools).
+
+        Fixtures live in tests/fixtures/. The Acme Bolt EV profile is
+        intentionally synthetic - do not suggest replacing it with a real
+        car model. Real-car examples would contain personal preferences.
+
+    # --- Project rules and CLAUDE.md ---
+    - path: ".claude/**/*.md"
+      instructions: |
+        Auto-loaded project rules for Claude Code. They define mandatory
+        conventions that take precedence over generic best-practice
+        suggestions. Review for clarity, consistency with other rules,
+        and alignment with the skills/commands they govern.
+
+        Do not suggest moving these files elsewhere or converting them to
+        a different format (JSON, YAML). The markdown-with-headings format
+        is required by Claude Code's rule loader.
+
+    # --- Plugin manifest ---
+    - path: ".claude-plugin/plugin.json"
+      instructions: |
+        Plugin metadata file. Version follows MAJOR.MINOR.PATCH semver.
+        Check that version bumps match the scope of changes (patch for
+        bug fixes, minor for features, major for breaking changes to
+        skill interfaces or path conventions).
+
+        The official schema supports: name, version, description, author,
+        homepage, repository, license, keywords, skills, commands, agents,
+        hooks, mcpServers, outputStyles, lspServers, userConfig, channels.
+        Custom top-level keys (like a bespoke "scripts" array) are ignored
+        by Claude Code - flag them as non-standard.
+
+    # --- GitHub Actions workflows ---
+    - path: ".github/workflows/*.yml"
+      instructions: |
+        Workflow injection is a real risk: never interpolate untrusted
+        input (issue titles, PR bodies, commit messages, head_ref) directly
+        into `run:` steps. Use `env:` blocks to bind them to quoted shell
+        variables first. Our workflows currently only use `matrix.*`
+        variables which are safe (internal CI inputs, not user content).
+
+        Python version matrix: 3.9, 3.11, 3.12. If you suggest bumping,
+        also update scripts/*.py path_instructions above.
+
+    # --- Coverage and test configuration ---
+    - path: "pyproject.toml"
+      instructions: |
+        This project uses pyproject.toml only for pytest and coverage.py
+        configuration (not as a Python package manifest - the plugin is
+        not installable via pip). The [project] table is a stub to satisfy
+        tooling that expects it. Do not suggest filling out dependencies,
+        scripts, or entry-points fields - the plugin is shipped through
+        the Claude Code plugin marketplace, not PyPI.
+
+# Knowledge base - treat our rules as coding guidelines
+knowledge_base:
+  opt_out: false
+  code_guidelines:
+    enabled: true
+    filePatterns:
+      - "CLAUDE.md"
+      - ".claude/CLAUDE.md"
+      - ".claude/rules/**/*.md"
