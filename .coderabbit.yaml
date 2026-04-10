@@ -156,8 +156,18 @@ reviews:
       instructions: |
         Python code targets Python >= 3.9 (see .github/workflows/test.yml
         matrix: 3.9, 3.11, 3.12). Do not suggest features only available in
-        3.10+ (no structural pattern matching, no `X | Y` union syntax in
-        annotations, no ParamSpec without `from __future__ import annotations`).
+        3.10+:
+        - No structural pattern matching (`match`/`case`)
+        - No `X | Y` union syntax in runtime-evaluated annotations
+          (it is safe inside a stringified annotation, i.e. with
+          `from __future__ import annotations`, but not at runtime)
+        - No `typing.ParamSpec`, `typing.Concatenate`, `typing.TypeAlias`,
+          `typing.TypeGuard`, or `typing.Self` unless imported from
+          `typing_extensions` (Python 3.9 lacks them in the stdlib and
+          `from __future__ import annotations` does NOT backport them -
+          it only defers annotation evaluation)
+        - No `zoneinfo.ZoneInfo` in a tzdata-less context without a
+          fallback to `backports.zoneinfo`
 
         The builder is intentionally stdlib-only - no numpy, pandas, scipy,
         jinja2, or other external dependencies. The OLS regression is
