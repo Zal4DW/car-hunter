@@ -166,8 +166,44 @@ else:
 if _state_path:
     with open(_state_path, "r") as f:
         _state = json.load(f)
-    LISTING_IDS = _state.get("listing_ids", {})
-    PRICE_CHANGES = _state.get("price_changes", {})
+
+    # Fail loudly on malformed sidecars. Silent fallback to empty dicts
+    # would hide typos in the file and leave the user wondering why
+    # days-on-market never appears in their dashboard.
+    if not isinstance(_state, dict):
+        raise SystemExit(
+            f"Listing state file {_state_path} must contain a JSON object, "
+            f"got {type(_state).__name__}"
+        )
+    _lids = _state.get("listing_ids", {})
+    _prices = _state.get("price_changes", {})
+    if not isinstance(_lids, dict):
+        raise SystemExit(
+            f"Listing state file {_state_path}: 'listing_ids' must be an object, "
+            f"got {type(_lids).__name__}"
+        )
+    if not isinstance(_prices, dict):
+        raise SystemExit(
+            f"Listing state file {_state_path}: 'price_changes' must be an object, "
+            f"got {type(_prices).__name__}"
+        )
+    # Validate listing_ids values are strings (AutoTrader IDs are digit strings).
+    for _k, _v in _lids.items():
+        if not isinstance(_k, str) or not isinstance(_v, str):
+            raise SystemExit(
+                f"Listing state file {_state_path}: 'listing_ids' entries must map "
+                f"string keys to string values, got {_k!r}: {_v!r}"
+            )
+    # price_changes values should be numeric (signed GBP delta).
+    for _k, _v in _prices.items():
+        if not isinstance(_k, str) or not isinstance(_v, (int, float)):
+            raise SystemExit(
+                f"Listing state file {_state_path}: 'price_changes' entries must map "
+                f"string keys to numeric values, got {_k!r}: {_v!r}"
+            )
+
+    LISTING_IDS = _lids
+    PRICE_CHANGES = _prices
     print(
         f"Loaded listing state from {_state_path}: "
         f"{len(LISTING_IDS)} listing IDs, {len(PRICE_CHANGES)} price changes"

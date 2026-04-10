@@ -17,6 +17,12 @@ from pathlib import Path
 
 import pytest
 
+# Hard upper bound for any builder subprocess call. The full builder
+# typically completes in under a second against the fixture data;
+# anything approaching this limit indicates a hang rather than slow
+# execution.
+BUILDER_TIMEOUT_SECONDS = 60
+
 
 @pytest.fixture
 def dashboard_output(
@@ -43,6 +49,7 @@ def dashboard_output(
         capture_output=True,
         text=True,
         env=subprocess_env,
+        timeout=BUILDER_TIMEOUT_SECONDS,
     )
     return result, output_html
 
@@ -117,6 +124,7 @@ class TestBuilderFailsHelpfully:
             capture_output=True,
             text=True,
             env=subprocess_env,
+            timeout=BUILDER_TIMEOUT_SECONDS,
         )
         assert result.returncode != 0
 
@@ -139,6 +147,7 @@ class TestBuilderFailsHelpfully:
             capture_output=True,
             text=True,
             env=subprocess_env,
+            timeout=BUILDER_TIMEOUT_SECONDS,
         )
         assert result.returncode != 0
 
@@ -168,7 +177,13 @@ class TestBuilderEdgeCases:
         ]
         if extra_args:
             args.extend(extra_args)
-        result = subprocess.run(args, capture_output=True, text=True, env=subprocess_env)
+        result = subprocess.run(
+            args,
+            capture_output=True,
+            text=True,
+            env=subprocess_env,
+            timeout=BUILDER_TIMEOUT_SECONDS,
+        )
         return result, output_html
 
     def test_sparse_csv_triggers_regression_fallback(
@@ -261,3 +276,91 @@ class TestBuilderEdgeCases:
         # The AutoTrader URL for at least one listing should appear in the
         # embedded table data.
         assert "autotrader.co.uk/car-details/202601150000001" in html
+
+    def test_listing_state_sidecar_auto_detected_by_profile_name(
+        self,
+        tmp_path: Path,
+        builder_script: Path,
+        fixture_multigen_profile_path: Path,
+        fixture_csv_path: Path,
+        fixture_listing_state_path: Path,
+        subprocess_env: dict,
+    ):
+        """If --listing-state is not passed, the builder auto-detects a
+        sidecar named `{profile_name}-listing-state.json` next to the CSV.
+        This test stages both the CSV and the sidecar in a tmp directory
+        with the expected filename and runs the builder without the flag.
+        """
+        staged_csv = tmp_path / "acme-bolt-listings.csv"
+        staged_csv.write_bytes(fixture_csv_path.read_bytes())
+        staged_sidecar = tmp_path / "acme-bolt-multigen-listing-state.json"
+        staged_sidecar.write_bytes(fixture_listing_state_path.read_bytes())
+
+        result, output_html = self._run(
+            builder_script,
+            fixture_multigen_profile_path,
+            staged_csv,
+            tmp_path,
+            subprocess_env,
+        )
+        assert result.returncode == 0, f"builder failed: {result.stderr}"
+        assert "Loaded listing state" in result.stdout, (
+            "auto-detected sidecar was not picked up"
+        )
+        assert "5 listing IDs" in result.stdout
+        html = output_html.read_text()
+        assert "autotrader.co.uk/car-details/202601150000001" in html
+
+    @pytest.mark.parametrize(
+        "bad_content,expected_token",
+        [
+            # _state itself not a dict (JSON array instead)
+            ('["not", "an", "object"]', "must contain a JSON object"),
+            # listing_ids is not a dict
+            ('{"listing_ids": "not-a-dict"}', "listing_ids"),
+            # price_changes is not a dict
+            ('{"listing_ids": {}, "price_changes": [1, 2, 3]}', "price_changes"),
+            # listing_ids has a non-string value
+            ('{"listing_ids": {"42500_Testville": 12345}}', "listing_ids"),
+            # price_changes has a non-numeric value
+            (
+                '{"listing_ids": {}, "price_changes": {"42500_Testville": "wat"}}',
+                "price_changes",
+            ),
+        ],
+        ids=[
+            "state-not-object",
+            "listing-ids-not-dict",
+            "price-changes-not-dict",
+            "listing-ids-non-string-value",
+            "price-changes-non-numeric-value",
+        ],
+    )
+    def test_malformed_listing_state_fails_loudly(
+        self,
+        tmp_path: Path,
+        builder_script: Path,
+        fixture_multigen_profile_path: Path,
+        fixture_csv_path: Path,
+        subprocess_env: dict,
+        bad_content: str,
+        expected_token: str,
+    ):
+        """Every validation branch in the sidecar loader should exit
+        non-zero with a descriptive error message. Covers the four
+        `raise SystemExit` checks added to fail loudly on malformed
+        sidecars instead of silently falling back to empty dicts.
+        """
+        bad_sidecar = tmp_path / "bad-state.json"
+        bad_sidecar.write_text(bad_content)
+
+        result, _ = self._run(
+            builder_script,
+            fixture_multigen_profile_path,
+            fixture_csv_path,
+            tmp_path,
+            subprocess_env,
+            extra_args=["--listing-state", str(bad_sidecar)],
+        )
+        assert result.returncode != 0
+        assert expected_token in (result.stderr + result.stdout)

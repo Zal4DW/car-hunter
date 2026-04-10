@@ -226,8 +226,12 @@ reviews:
         Custom top-level keys (like a bespoke "scripts" array) are ignored
         by Claude Code - flag them as non-standard.
 
-        Keep name and version in sync with the top-level
-        .claude-plugin/marketplace.json and the plugins[] entry inside it.
+        Keep the plugin name in sync with the top-level
+        .claude-plugin/marketplace.json (both the top-level name field
+        and the plugins[0].name field must match this file's name).
+        plugins[] entries carry name, source, and description - no
+        version field. The version lives only in plugin.json here and
+        in the top-level marketplace.json.
 
     # --- Marketplace manifest ---
     - path: ".claude-plugin/marketplace.json"
@@ -237,7 +241,10 @@ reviews:
         name, owner, plugins[]. Each plugins[] entry needs name, source
         (relative path to the plugin dir), and description.
 
-        Keep name and version in sync with car-hunter/.claude-plugin/plugin.json.
+        Keep the name, version, and description fields in sync with
+        car-hunter/.claude-plugin/plugin.json. Each plugins[] entry
+        carries name, source, and description only - never a version,
+        which lives at the top level of this file and in plugin.json.
         The source field must be a relative path starting with ./ that
         resolves to a directory containing .claude-plugin/plugin.json.
 
@@ -251,7 +258,7 @@ reviews:
         variables which are safe (internal CI inputs, not user content).
 
         Python version matrix: 3.10, 3.11, 3.12. If you suggest bumping,
-        also update scripts/*.py path_instructions above.
+        also update car-hunter/scripts/*.py path_instructions above.
 
     # --- Coverage and test configuration ---
     - path: "pyproject.toml"

@@ -34,6 +34,9 @@ from pathlib import Path
 import pytest
 from bs4 import BeautifulSoup
 
+# See test_build_dashboard_cli.BUILDER_TIMEOUT_SECONDS - same rationale.
+BUILDER_TIMEOUT_SECONDS = 60
+
 
 # ── Shared builder output fixture ──────────────────────────────────────────
 
@@ -65,6 +68,7 @@ def built_html(
         capture_output=True,
         text=True,
         env=subprocess_env,
+        timeout=BUILDER_TIMEOUT_SECONDS,
     )
     assert result.returncode == 0, f"builder failed: {result.stderr}"
     return output_html.read_text()
@@ -164,12 +168,22 @@ class TestChartJsIntegration:
         chartjs = [s for s in scripts if "chart" in (s.get("src") or "").lower()]
         assert chartjs, "no Chart.js script tag found"
 
-    def test_chartjs_loaded_from_cdn(self, soup: BeautifulSoup):
+    def test_chartjs_loaded_from_remote_cdn(self, soup: BeautifulSoup):
+        """Chart.js must be loaded from a remote HTTP(S) URL whose path
+        mentions 'chart'. We deliberately do not lock this to a specific
+        CDN host - switching from cdnjs to jsdelivr, unpkg, or any other
+        should not break the test."""
         scripts = soup.find_all("script", src=True)
         srcs = [s.get("src") or "" for s in scripts]
-        assert any(
-            "cdnjs.cloudflare.com" in src and "chart" in src.lower() for src in srcs
-        ), f"Chart.js not loaded from cdnjs; srcs: {srcs}"
+        remote_chart_srcs = [
+            src
+            for src in srcs
+            if (src.startswith("http://") or src.startswith("https://"))
+            and "chart" in src.lower()
+        ]
+        assert remote_chart_srcs, (
+            f"no remote Chart.js script tag found; srcs: {srcs}"
+        )
 
     def test_exactly_five_canvases_present(self, soup: BeautifulSoup):
         canvases = soup.find_all("canvas")
@@ -251,28 +265,21 @@ class TestEmbeddedJsonBlocks:
     def _extract_blob(self, html_text: str, name: str) -> str:
         """Return the literal right-hand-side of `const NAME = ...;`.
 
-        Uses a brace-balanced scan so nested objects and arrays are captured
-        correctly even when they span many lines.
+        Uses Python's JSON decoder in streaming mode (raw_decode) to find
+        where the JSON value ends. This correctly handles edge cases that a
+        naive brace-balanced scan would miss - most importantly, braces or
+        brackets appearing inside string literals - because raw_decode does
+        proper JSON tokenisation with string escaping.
         """
         match = re.search(rf"const {re.escape(name)}\s*=\s*", html_text)
         assert match, f"const {name} declaration not found in HTML"
         start = match.end()
-        if html_text[start] == "{":
-            open_char, close_char = "{", "}"
-        elif html_text[start] == "[":
-            open_char, close_char = "[", "]"
-        else:
-            pytest.fail(f"{name} is neither an object nor an array literal")
-        depth = 0
-        for i in range(start, len(html_text)):
-            ch = html_text[i]
-            if ch == open_char:
-                depth += 1
-            elif ch == close_char:
-                depth -= 1
-                if depth == 0:
-                    return html_text[start : i + 1]
-        pytest.fail(f"unterminated {name} literal")
+        decoder = json.JSONDecoder()
+        try:
+            _value, consumed = decoder.raw_decode(html_text[start:])
+        except (json.JSONDecodeError, ValueError) as exc:
+            pytest.fail(f"unterminated or invalid {name} literal: {exc}")
+        return html_text[start : start + consumed]
 
     def test_every_expected_constant_is_declared(self, built_html: str):
         for name in self.EXPECTED_CONSTANTS:
