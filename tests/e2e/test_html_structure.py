@@ -155,13 +155,15 @@ class TestDocumentChrome:
 class TestChartJsIntegration:
     """Chart.js CDN script and canvas elements must be wired up correctly."""
 
-    EXPECTED_CANVAS_IDS = {
-        "depCurveChart",
-        "dealScoreChart",
-        "specPremiumChart",
-        "negotiationChart",
-        "priceMileageChart",
-    }
+    EXPECTED_CANVAS_IDS = frozenset(
+        {
+            "depCurveChart",
+            "dealScoreChart",
+            "specPremiumChart",
+            "negotiationChart",
+            "priceMileageChart",
+        }
+    )
 
     def test_chartjs_script_tag_present(self, soup: BeautifulSoup):
         scripts = soup.find_all("script", src=True)
@@ -205,13 +207,15 @@ class TestFilterControls:
     """The dashboard exposes five filter dropdowns that cascade through
     every chart, KPI card, and table row."""
 
-    EXPECTED_SELECT_IDS = {
-        "filterVariant",
-        "filterGen",
-        "filterMileage",
-        "filterBudget",
-        "filterValue",
-    }
+    EXPECTED_SELECT_IDS = frozenset(
+        {
+            "filterVariant",
+            "filterGen",
+            "filterMileage",
+            "filterBudget",
+            "filterValue",
+        }
+    )
 
     def test_all_five_filter_selects_present(self, soup: BeautifulSoup):
         selects = soup.find_all("select")
@@ -252,7 +256,7 @@ class TestEmbeddedJsonBlocks:
     <script>. Each blob is produced by `js_safe` which wraps json.dumps,
     so every blob must be valid JSON when extracted."""
 
-    EXPECTED_CONSTANTS = [
+    EXPECTED_CONSTANTS = (
         "ALL_DATA",
         "DEP_CURVES",
         "SPEC_PREMIUMS",
@@ -260,7 +264,7 @@ class TestEmbeddedJsonBlocks:
         "PM_TREND",
         "VARIANT_COLOURS",
         "HIGHLIGHT_SPECS",
-    ]
+    )
 
     def _extract_blob(self, html_text: str, name: str) -> str:
         """Return the literal right-hand-side of `const NAME = ...;`.

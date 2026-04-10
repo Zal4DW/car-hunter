@@ -22,7 +22,7 @@ car-hunter/                              # marketplace repo root
     └── docs/                            # profile schema reference
 ```
 
-When Claude Code installs this plugin from the marketplace, `${CLAUDE_PLUGIN_ROOT}` resolves to the `car-hunter/` subdirectory (wherever the user's install cached it). Tests, CI, and dev tooling stay at the repo root and are never shipped.
+When Claude Code installs this plugin from the marketplace, `${CLAUDE_PLUGIN_ROOT}` resolves to the `car-hunter/` subdirectory (wherever the user's installation cache stores it). Tests, CI, and dev tooling stay at the repo root and are never shipped.
 
 ## Components
 
