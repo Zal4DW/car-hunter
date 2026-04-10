@@ -2,7 +2,7 @@
 name = "car-hunter-tests"
 version = "0.0.0"
 description = "Test harness for the Car Hunter Claude Code plugin. Not shipped with the plugin."
-requires-python = ">=3.9"
+requires-python = ">=3.10"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
