@@ -19,3 +19,32 @@ markers = [
     "integration: tests that combine multiple lib functions against fixtures",
     "e2e: tests that invoke build_dashboard.py as a subprocess",
 ]
+
+[tool.coverage.run]
+source = ["scripts"]
+# parallel + sigterm enable subprocess coverage: each spawned interpreter
+# writes its own .coverage.* datafile that `coverage combine` merges.
+parallel = true
+sigterm = true
+omit = [
+    "tests/*",
+    "*/site-packages/*",
+]
+
+[tool.coverage.paths]
+# Map subprocess-reported paths back to the canonical scripts/ dir so the
+# combined report groups them correctly.
+scripts = ["scripts", "*/scripts"]
+
+[tool.coverage.report]
+show_missing = true
+skip_empty = true
+precision = 1
+exclude_lines = [
+    "pragma: no cover",
+    "if __name__ == .__main__.:",
+    "raise NotImplementedError",
+]
+
+[tool.coverage.html]
+directory = "htmlcov"

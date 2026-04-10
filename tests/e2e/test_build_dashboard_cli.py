@@ -3,8 +3,15 @@
 These are the only tests that exercise the full builder binary including
 argparse, file I/O, and HTML generation. Slower than unit/integration but
 catch regressions in the orchestration layer no other test layer sees.
+
+Subprocess coverage: the `subprocess_env` fixture enables coverage tracing
+inside the spawned interpreter by setting COVERAGE_PROCESS_START and adding
+the tests/coverage_support directory (containing sitecustomize.py) to
+PYTHONPATH. `coverage combine` afterwards merges the subprocess datafiles
+with the in-process ones so the final report covers build_dashboard.py too.
 """
 
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -13,8 +20,29 @@ import pytest
 
 
 @pytest.fixture
+def subprocess_env(project_root: Path) -> dict:
+    """Env vars to pass to builder subprocesses so coverage traces them."""
+    env = os.environ.copy()
+    coverage_support = project_root / "tests" / "coverage_support"
+    coverage_config = project_root / "pyproject.toml"
+    if coverage_support.is_dir() and coverage_config.is_file():
+        env["COVERAGE_PROCESS_START"] = str(coverage_config)
+        existing_pythonpath = env.get("PYTHONPATH", "")
+        env["PYTHONPATH"] = (
+            f"{coverage_support}{os.pathsep}{existing_pythonpath}"
+            if existing_pythonpath
+            else str(coverage_support)
+        )
+    return env
+
+
+@pytest.fixture
 def dashboard_output(
-    tmp_path: Path, builder_script: Path, fixture_profile_path: Path, fixture_csv_path: Path
+    tmp_path: Path,
+    builder_script: Path,
+    fixture_profile_path: Path,
+    fixture_csv_path: Path,
+    subprocess_env: dict,
 ):
     output_html = tmp_path / "acme-bolt-dashboard.html"
     result = subprocess.run(
@@ -32,6 +60,7 @@ def dashboard_output(
         ],
         capture_output=True,
         text=True,
+        env=subprocess_env,
     )
     return result, output_html
 
@@ -88,7 +117,11 @@ class TestBuilderOutput:
 
 class TestBuilderFailsHelpfully:
     def test_missing_profile_returns_nonzero(
-        self, tmp_path: Path, builder_script: Path, fixture_csv_path: Path
+        self,
+        tmp_path: Path,
+        builder_script: Path,
+        fixture_csv_path: Path,
+        subprocess_env: dict,
     ):
         result = subprocess.run(
             [
@@ -101,11 +134,16 @@ class TestBuilderFailsHelpfully:
             ],
             capture_output=True,
             text=True,
+            env=subprocess_env,
         )
         assert result.returncode != 0
 
     def test_missing_csv_returns_nonzero(
-        self, tmp_path: Path, builder_script: Path, fixture_profile_path: Path
+        self,
+        tmp_path: Path,
+        builder_script: Path,
+        fixture_profile_path: Path,
+        subprocess_env: dict,
     ):
         result = subprocess.run(
             [
@@ -118,5 +156,6 @@ class TestBuilderFailsHelpfully:
             ],
             capture_output=True,
             text=True,
+            env=subprocess_env,
         )
         assert result.returncode != 0
