@@ -16,7 +16,7 @@ Car-hunter is built around a single principle: **the car profile JSON is the onl
 
 ## What does NOT belong in skills or the builder
 
-Never hardcode in `SKILL.md` files or `scripts/build_dashboard.py`:
+Never hardcode in `SKILL.md` files or `car-hunter/scripts/build_dashboard.py`:
 - Variant names, tier numbers, or chart colours
 - New prices (RRP)
 - Specific spec options or their weights
@@ -29,7 +29,7 @@ If you catch yourself writing `if variant == "RS e-tron GT"` in a skill, stop. M
 
 - Adding a new car (BMW M4, Porsche Taycan, Tesla Model 3) requires only a new profile JSON, not code changes
 - Users can fork profiles to tweak weights or filters without touching the plugin
-- The schema is documented in `docs/car-profile-schema.md` - keep it current when extending the profile shape
+- The schema is documented in `car-hunter/docs/car-profile-schema.md` - keep it current when extending the profile shape
 
 ## Referencing profile fields in skills
 

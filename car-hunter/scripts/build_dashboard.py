@@ -43,6 +43,12 @@ parser.add_argument("--profile", required=True, help="Path to car-profile.json")
 parser.add_argument("--csv", required=True, help="Path to CSV data file")
 parser.add_argument("--output", default=None, help="Output HTML path (default: auto-generated)")
 parser.add_argument("--date", default=None, help="Override today's date (YYYY-MM-DD)")
+parser.add_argument(
+    "--listing-state",
+    default=None,
+    help="Path to a JSON file with listing_ids and price_changes dictionaries. "
+    "If omitted, auto-detects {profile_name}-listing-state.json next to the CSV.",
+)
 args = parser.parse_args()
 
 # ── Load profile ────────────────────────────────────────────────────
@@ -134,21 +140,74 @@ with open(args.csv, "r") as f:
 print(f"Loaded {len(rows)} listings")
 
 # ── Listing IDs and price changes ───────────────────────────────────
-# These are manually maintained per search session.
-# Keyed by composite key: {price}_{location}
+# Loaded from an optional sidecar JSON keyed by composite key {price}_{location}.
+# The sidecar is resolved in this order:
+#   1. --listing-state <path> CLI argument, if provided
+#   2. {csv_dir}/{profile_name}-listing-state.json, if it exists
+#   3. Neither - LISTING_IDS and PRICE_CHANGES stay empty (no trend arrows,
+#      no days-on-market)
 #
-# To populate: copy listing IDs and price changes from search sessions.
-# The builder will use these for days-on-market and trend arrows.
+# Expected sidecar shape:
+#   { "listing_ids":    { "42500_Testville": "20251202...", ... },
+#     "price_changes":  { "42500_Testville": -500,          ... } }
 
-LISTING_IDS = {
-    # Example: '38990_Hyde': '202512028290694',
-    # Add entries here after each search session
-}
+LISTING_IDS = {}
+PRICE_CHANGES = {}
 
-PRICE_CHANGES = {
-    # Example: '38990_Hyde': -500,  # was 39490 previously
-    # Add entries here after each search session
-}
+_state_path = None
+if args.listing_state:
+    _state_path = args.listing_state
+else:
+    _csv_dir = os.path.dirname(os.path.abspath(args.csv))
+    _auto = os.path.join(_csv_dir, f"{PROFILE_NAME}-listing-state.json")
+    if os.path.isfile(_auto):
+        _state_path = _auto
+
+if _state_path:
+    with open(_state_path, "r") as f:
+        _state = json.load(f)
+
+    # Fail loudly on malformed sidecars. Silent fallback to empty dicts
+    # would hide typos in the file and leave the user wondering why
+    # days-on-market never appears in their dashboard.
+    if not isinstance(_state, dict):
+        raise SystemExit(
+            f"Listing state file {_state_path} must contain a JSON object, "
+            f"got {type(_state).__name__}"
+        )
+    _lids = _state.get("listing_ids", {})
+    _prices = _state.get("price_changes", {})
+    if not isinstance(_lids, dict):
+        raise SystemExit(
+            f"Listing state file {_state_path}: 'listing_ids' must be an object, "
+            f"got {type(_lids).__name__}"
+        )
+    if not isinstance(_prices, dict):
+        raise SystemExit(
+            f"Listing state file {_state_path}: 'price_changes' must be an object, "
+            f"got {type(_prices).__name__}"
+        )
+    # Validate listing_ids values are strings (AutoTrader IDs are digit strings).
+    for _k, _v in _lids.items():
+        if not isinstance(_k, str) or not isinstance(_v, str):
+            raise SystemExit(
+                f"Listing state file {_state_path}: 'listing_ids' entries must map "
+                f"string keys to string values, got {_k!r}: {_v!r}"
+            )
+    # price_changes values should be numeric (signed GBP delta).
+    for _k, _v in _prices.items():
+        if not isinstance(_k, str) or not isinstance(_v, (int, float)):
+            raise SystemExit(
+                f"Listing state file {_state_path}: 'price_changes' entries must map "
+                f"string keys to numeric values, got {_k!r}: {_v!r}"
+            )
+
+    LISTING_IDS = _lids
+    PRICE_CHANGES = _prices
+    print(
+        f"Loaded listing state from {_state_path}: "
+        f"{len(LISTING_IDS)} listing IDs, {len(PRICE_CHANGES)} price changes"
+    )
 
 # ── Composite keys and listing tracking ─────────────────────────────
 

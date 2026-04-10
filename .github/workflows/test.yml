@@ -23,7 +23,7 @@ jobs:
           python-version: ${{ matrix.python-version }}
 
       - name: Install test dependencies
-        run: python -m pip install --upgrade pip pytest pytest-cov coverage
+        run: python -m pip install --upgrade pip pytest pytest-cov coverage beautifulsoup4
 
       - name: Run unit tests
         run: python -m pytest tests/unit -v
@@ -34,7 +34,7 @@ jobs:
       - name: Run end-to-end tests with coverage
         run: |
           rm -f .coverage .coverage.*
-          python -m pytest --cov=scripts \
+          python -m pytest --cov=car-hunter/scripts \
             --cov-report=term-missing \
             --cov-report=html \
             --cov-report=xml \

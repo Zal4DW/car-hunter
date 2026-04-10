@@ -89,7 +89,7 @@ reviews:
         syntax highlighting.
 
     # --- SKILL.md files specifically ---
-    - path: "skills/**/SKILL.md"
+    - path: "car-hunter/skills/**/SKILL.md"
       instructions: |
         SKILL.md is the primary configuration file for Claude Code skills.
         YAML frontmatter followed by markdown instructions.
@@ -115,7 +115,7 @@ reviews:
           runtime and substituted inline in skill content
 
     # --- Slash command files ---
-    - path: "commands/*.md"
+    - path: "car-hunter/commands/*.md"
       instructions: |
         Slash command files. YAML frontmatter (description, allowed-tools)
         followed by natural-language instructions for Claude to follow.
@@ -131,7 +131,7 @@ reviews:
         patterns like `mcp__Claude_in_Chrome__*`.
 
     # --- Profile storage guidance ---
-    - path: "{skills,commands}/**/*.md"
+    - path: "car-hunter/{skills,commands}/**/*.md"
       instructions: |
         PATH CONVENTIONS: Car Hunter uses three distinct storage locations:
         1. `${CLAUDE_PLUGIN_ROOT}` - bundled, read-only (scripts, skill
@@ -152,7 +152,7 @@ reviews:
         `{profile_name}-searches/`.
 
     # --- Python source ---
-    - path: "scripts/*.py"
+    - path: "car-hunter/scripts/*.py"
       instructions: |
         Python code targets Python >= 3.10 (see .github/workflows/test.yml
         matrix: 3.10, 3.11, 3.12). Structural pattern matching, `X | Y`
@@ -212,8 +212,24 @@ reviews:
         a different format (JSON, YAML). The markdown-with-headings format
         is required by Claude Code's rule loader.
 
+        PATH REFERENCES: These rule files are dev-time documentation.
+        When they refer to source files in the repository (for example
+        `car-hunter/scripts/build_dashboard.py`, `car-hunter/docs/car-profile-schema.md`,
+        or `SKILL.md`), they use repo-relative paths deliberately so
+        developers reading the rule can navigate directly to the file
+        they are being told about. Do NOT suggest replacing these
+        repo-relative paths with `${CLAUDE_PLUGIN_ROOT}/...`. That
+        variable is only meaningful at runtime for bundled assets
+        referenced from inside skills, commands, or the installed
+        plugin scripts - not for dev-time rules describing source files.
+
+        The three-tier path model (PLUGIN_ROOT/PLUGIN_DATA/workspace)
+        applies to runtime behaviour of skills and commands. Rule
+        documentation about the repo layout does not need to go through
+        it.
+
     # --- Plugin manifest ---
-    - path: ".claude-plugin/plugin.json"
+    - path: "car-hunter/.claude-plugin/plugin.json"
       instructions: |
         Plugin metadata file. Version follows MAJOR.MINOR.PATCH semver.
         Check that version bumps match the scope of changes (patch for
@@ -226,6 +242,28 @@ reviews:
         Custom top-level keys (like a bespoke "scripts" array) are ignored
         by Claude Code - flag them as non-standard.
 
+        Keep the plugin name in sync with the top-level
+        .claude-plugin/marketplace.json (both the top-level name field
+        and the plugins[0].name field must match this file's name).
+        plugins[] entries carry name, source, and description - no
+        version field. The version lives only in plugin.json here and
+        in the top-level marketplace.json.
+
+    # --- Marketplace manifest ---
+    - path: ".claude-plugin/marketplace.json"
+      instructions: |
+        Top-level marketplace manifest. The repo root is a marketplace
+        containing a single plugin at ./car-hunter/. Required fields:
+        name, owner, plugins[]. Each plugins[] entry needs name, source
+        (relative path to the plugin dir), and description.
+
+        Keep the name, version, and description fields in sync with
+        car-hunter/.claude-plugin/plugin.json. Each plugins[] entry
+        carries name, source, and description only - never a version,
+        which lives at the top level of this file and in plugin.json.
+        The source field must be a relative path starting with ./ that
+        resolves to a directory containing .claude-plugin/plugin.json.
+
     # --- GitHub Actions workflows ---
     - path: ".github/workflows/*.yml"
       instructions: |
@@ -236,7 +274,7 @@ reviews:
         variables which are safe (internal CI inputs, not user content).
 
         Python version matrix: 3.10, 3.11, 3.12. If you suggest bumping,
-        also update scripts/*.py path_instructions above.
+        also update car-hunter/scripts/*.py path_instructions above.
 
     # --- Coverage and test configuration ---
     - path: "pyproject.toml"

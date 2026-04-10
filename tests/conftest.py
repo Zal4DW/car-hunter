@@ -1,10 +1,16 @@
 """Shared pytest fixtures for Car Hunter tests.
 
-Adds the `scripts/` directory to sys.path so tests can import `dashboard_lib`
-directly without installing anything. Provides path fixtures pointing at the
-synthetic Acme Bolt EV fixture profile and CSV used throughout the suite.
+Adds the plugin `scripts/` directory to sys.path so tests can import
+`dashboard_lib` directly without installing anything. Provides path fixtures
+pointing at the synthetic Acme Bolt EV fixture profile and CSV used throughout
+the suite.
+
+The plugin lives in a `car-hunter/` subdirectory at the repo root so the
+marketplace manifest at `.claude-plugin/marketplace.json` can source it. Tests
+stay at the repo root.
 """
 
+import os
 import json
 import sys
 from pathlib import Path
@@ -12,7 +18,8 @@ from pathlib import Path
 import pytest
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
-SCRIPTS_DIR = PROJECT_ROOT / "scripts"
+PLUGIN_DIR = PROJECT_ROOT / "car-hunter"
+SCRIPTS_DIR = PLUGIN_DIR / "scripts"
 FIXTURES_DIR = Path(__file__).resolve().parent / "fixtures"
 
 if str(SCRIPTS_DIR) not in sys.path:
@@ -22,6 +29,11 @@ if str(SCRIPTS_DIR) not in sys.path:
 @pytest.fixture(scope="session")
 def project_root() -> Path:
     return PROJECT_ROOT
+
+
+@pytest.fixture(scope="session")
+def plugin_dir() -> Path:
+    return PLUGIN_DIR
 
 
 @pytest.fixture(scope="session")
@@ -45,6 +57,21 @@ def fixture_csv_path() -> Path:
 
 
 @pytest.fixture(scope="session")
+def fixture_multigen_profile_path() -> Path:
+    return FIXTURES_DIR / "acme-bolt-multigen.json"
+
+
+@pytest.fixture(scope="session")
+def fixture_sparse_csv_path() -> Path:
+    return FIXTURES_DIR / "acme-bolt-sparse.csv"
+
+
+@pytest.fixture(scope="session")
+def fixture_listing_state_path() -> Path:
+    return FIXTURES_DIR / "acme-bolt-listing-state.json"
+
+
+@pytest.fixture(scope="session")
 def loaded_profile(fixture_profile_path: Path) -> dict:
     with fixture_profile_path.open() as f:
         return json.load(f)
@@ -58,3 +85,25 @@ def spec_options(loaded_profile: dict) -> list:
 @pytest.fixture(scope="session")
 def variant_by_name(loaded_profile: dict) -> dict:
     return {v["name"]: v for v in loaded_profile["variants"]}
+
+
+@pytest.fixture(scope="session")
+def subprocess_env(project_root: Path) -> dict:
+    """Env vars to pass to builder subprocesses so coverage traces them.
+
+    Sets COVERAGE_PROCESS_START and adds tests/coverage_support to
+    PYTHONPATH so the subprocess picks up sitecustomize.py and starts
+    recording coverage before build_dashboard.py imports anything.
+    """
+    env = os.environ.copy()
+    coverage_support = project_root / "tests" / "coverage_support"
+    coverage_config = project_root / "pyproject.toml"
+    if coverage_support.is_dir() and coverage_config.is_file():
+        env["COVERAGE_PROCESS_START"] = str(coverage_config)
+        existing_pythonpath = env.get("PYTHONPATH", "")
+        env["PYTHONPATH"] = (
+            f"{coverage_support}{os.pathsep}{existing_pythonpath}"
+            if existing_pythonpath
+            else str(coverage_support)
+        )
+    return env
