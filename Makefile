@@ -16,16 +16,16 @@ test-e2e:
 # combines the parallel datafiles automatically. Requires pytest-cov.
 coverage:
 	rm -f .coverage .coverage.*
-	python3 -m pytest --cov=scripts --cov-report=term-missing
+	python3 -m pytest --cov=car-hunter/scripts --cov-report=term-missing
 
 coverage-html:
 	rm -f .coverage .coverage.*
-	python3 -m pytest --cov=scripts --cov-report=term-missing --cov-report=html
+	python3 -m pytest --cov=car-hunter/scripts --cov-report=term-missing --cov-report=html
 	@echo "HTML report: htmlcov/index.html"
 
 coverage-xml:
 	rm -f .coverage .coverage.*
-	python3 -m pytest --cov=scripts --cov-report=term-missing --cov-report=xml
+	python3 -m pytest --cov=car-hunter/scripts --cov-report=term-missing --cov-report=xml
 	@echo "XML report: coverage.xml"
 
 clean:

@@ -1,0 +1,16 @@
+{
+  "name": "car-hunter",
+  "version": "1.2.1",
+  "description": "Search UK car listings, track prices, and build buyer intelligence dashboards with regression-based value scoring. Config-driven: works with any car model via car profiles.",
+  "owner": {
+    "name": "Paul Bratcher",
+    "url": "https://www.linkedin.com/in/paul-bratcher/"
+  },
+  "plugins": [
+    {
+      "name": "car-hunter",
+      "source": "./car-hunter",
+      "description": "Search UK car listings, track prices, and build buyer intelligence dashboards with regression-based value scoring."
+    }
+  ]
+}

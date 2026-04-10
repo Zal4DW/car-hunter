@@ -21,7 +21,7 @@ markers = [
 ]
 
 [tool.coverage.run]
-source = ["scripts"]
+source = ["car-hunter/scripts"]
 # parallel + sigterm enable subprocess coverage: each spawned interpreter
 # writes its own .coverage.* datafile that `coverage combine` merges.
 parallel = true
@@ -34,7 +34,7 @@ omit = [
 [tool.coverage.paths]
 # Map subprocess-reported paths back to the canonical scripts/ dir so the
 # combined report groups them correctly.
-scripts = ["scripts", "*/scripts"]
+scripts = ["car-hunter/scripts", "*/car-hunter/scripts"]
 
 [tool.coverage.report]
 show_missing = true

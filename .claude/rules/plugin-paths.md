@@ -14,6 +14,8 @@ The absolute path to the plugin's installation directory. Contains everything th
 - `${CLAUDE_PLUGIN_ROOT}/scripts/dashboard_lib.py`
 - `${CLAUDE_PLUGIN_ROOT}/docs/car-profile-schema.md` (schema reference)
 
+At runtime `${CLAUDE_PLUGIN_ROOT}` resolves to the `car-hunter/` subdirectory inside the repo (or wherever Claude Code cached the install). Repo-relative paths during development are `car-hunter/skills/`, `car-hunter/scripts/`, etc. Skills and commands should always use the `${CLAUDE_PLUGIN_ROOT}` variable, never hardcoded repo-relative paths, so they work identically at dev time and after install.
+
 **Rules:**
 - Treat as read-only. On marketplace installs the plugin cache is replaced on every update, so anything written here is lost.
 - Never write user data here. Never write profiles, search results, CSVs, or dashboards here.
