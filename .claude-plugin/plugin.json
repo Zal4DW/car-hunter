@@ -1,17 +1,13 @@
 {
   "name": "car-hunter",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "Search UK car listings, track prices, and build buyer intelligence dashboards with regression-based value scoring. Config-driven: works with any car model via car profiles.",
   "author": {
-    "name": "Paul"
+    "name": "Paul Bratcher",
+    "url": "https://www.linkedin.com/in/paul-bratcher/"
   },
-  "keywords": ["car-search", "autotrader", "depreciation", "ev", "value-analysis", "dashboard"],
-  "scripts": [
-    {
-      "path": "scripts/build_dashboard.py",
-      "description": "Standalone Python builder: reads a car profile JSON and CSV data, runs OLS regression, and writes a self-contained HTML dashboard. No external libraries required.",
-      "interpreter": "python3",
-      "invoked_by": "skills/car-value-dashboard/SKILL.md"
-    }
-  ]
+  "homepage": "https://github.com/Zal4DW/car-hunter",
+  "repository": "https://github.com/Zal4DW/car-hunter",
+  "license": "CC-BY-NC-4.0",
+  "keywords": ["car-search", "autotrader", "depreciation", "ev", "value-analysis", "dashboard"]
 }

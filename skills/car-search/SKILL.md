@@ -24,11 +24,11 @@ Search UK car listing websites for used cars matching an active car profile. Com
 
 ## Prerequisites
 
-This skill requires an active car profile in `${CLAUDE_PLUGIN_ROOT}/profiles/`. If no profile exists, direct the user to the `setup-car-profile` skill first.
+This skill requires an active car profile in `${CLAUDE_PLUGIN_DATA}/profiles/`. Profiles are user-created and live in the plugin's persistent data directory, not in the plugin install. If no profile exists, direct the user to the `setup-car-profile` skill first.
 
 ## Loading the Profile
 
-1. Check `${CLAUDE_PLUGIN_ROOT}/profiles/` for available `.json` profile files
+1. Check `${CLAUDE_PLUGIN_DATA}/profiles/` for available `.json` profile files. If the directory does not exist yet, no profiles have been created - run `setup-car-profile` first.
 2. If multiple profiles exist, ask the user which car they want to search for
 3. Load the selected `car-profile.json` and use it to configure the entire search
 

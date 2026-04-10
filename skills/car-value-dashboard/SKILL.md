@@ -22,8 +22,8 @@ Build or update an interactive HTML dashboard that analyses car listings to help
 
 ## Prerequisites
 
-1. An active car profile in `${CLAUDE_PLUGIN_ROOT}/profiles/`
-2. A CSV data file produced by the `car-search` skill
+1. An active car profile in `${CLAUDE_PLUGIN_DATA}/profiles/` (created via the `setup-car-profile` skill)
+2. A CSV data file produced by the `car-search` skill, in the user's workspace at `{profile_name}-searches/`
 
 If multiple profiles exist, ask which car to build the dashboard for.
 
@@ -42,12 +42,12 @@ The script is fully config-driven via CLI arguments - do not copy, edit, or rege
 
 ## Data Sources
 
-### Car profile
+### Car profile (user data, read-write, persists across updates)
 ```
-${CLAUDE_PLUGIN_ROOT}/profiles/{profile_name}.json
+${CLAUDE_PLUGIN_DATA}/profiles/{profile_name}.json
 ```
 
-### CSV data file
+### CSV data file (project artefact, in the user's workspace)
 ```
 {profile_name}-searches/{profile_name}-all-listings-{YYYY-MM-DD}.csv
 ```
@@ -198,11 +198,11 @@ The builder script lives in the plugin at `${CLAUDE_PLUGIN_ROOT}/scripts/build_d
 
 ## Workflow Summary
 
-1. Load the car profile from `${CLAUDE_PLUGIN_ROOT}/profiles/{profile_name}.json`
-2. Check for existing CSV data in the archive folder
+1. Load the car profile from `${CLAUDE_PLUGIN_DATA}/profiles/{profile_name}.json`
+2. Check for existing CSV data in the `{profile_name}-searches/` folder in the user's workspace
 3. If data is stale (>2 days old) or user requests fresh data, run `car-search` skill first
 4. Update LISTING_IDS and PRICE_CHANGES dictionaries in the profile (or a sidecar JSON) if new search data collected
-5. Run `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/build_dashboard.py --profile <profile.json> --csv <latest.csv>` to regenerate the dashboard
+5. Run `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/build_dashboard.py --profile "${CLAUDE_PLUGIN_DATA}/profiles/{profile_name}.json" --csv <latest.csv>` to regenerate the dashboard
 6. Present key findings to the user (R-squared, flattening point, top deals, spec premiums)
 
 ## Important Notes

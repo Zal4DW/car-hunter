@@ -29,7 +29,7 @@ If you catch yourself writing `if variant == "RS e-tron GT"` in a skill, stop. M
 
 - Adding a new car (BMW M4, Porsche Taycan, Tesla Model 3) requires only a new profile JSON, not code changes
 - Users can fork profiles to tweak weights or filters without touching the plugin
-- The schema is documented in `profiles/car-profile-schema.md` - keep it current when extending the profile shape
+- The schema is documented in `docs/car-profile-schema.md` - keep it current when extending the profile shape
 
 ## Referencing profile fields in skills
 

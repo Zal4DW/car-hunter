@@ -21,12 +21,21 @@ Create or update a car profile that configures the entire car-hunter plugin for 
 
 ## Profile Location
 
-Profiles are stored as JSON files in:
+Profiles are **user data**, not bundled plugin assets. They must be written to the plugin's persistent data directory, which Claude Code provides via the `${CLAUDE_PLUGIN_DATA}` environment variable:
+
 ```
-${CLAUDE_PLUGIN_ROOT}/profiles/{profile-name}.json
+${CLAUDE_PLUGIN_DATA}/profiles/{profile-name}.json
 ```
 
-The schema is documented in `${CLAUDE_PLUGIN_ROOT}/profiles/car-profile-schema.md`.
+This directory:
+- Is writable (unlike `${CLAUDE_PLUGIN_ROOT}`, which is read-only on marketplace installs)
+- Persists across plugin updates
+- Is per-user and private to this plugin
+- Is created automatically the first time it is referenced
+
+**Never write profiles to `${CLAUDE_PLUGIN_ROOT}/profiles/`.** The plugin root is read-only once installed and any writes there will either fail or be lost on the next update.
+
+The schema is documented in `${CLAUDE_PLUGIN_ROOT}/docs/car-profile-schema.md` (read-only, bundled with the plugin).
 
 ## Interactive Setup Process
 
@@ -125,10 +134,11 @@ For non-UK markets, this section would need a different approach.
 
 After gathering all information:
 
-1. Write the complete `car-profile.json` to `${CLAUDE_PLUGIN_ROOT}/profiles/{profile-name}.json`
-2. Generate a `references/{profile-name}-specs.md` file with human-readable spec identification guidance (adapted from the spec_options and search_terms)
-3. Present a summary of the profile to the user for review
-4. Offer to run the first search immediately using the new profile
+1. Ensure the profiles directory exists. Use Bash to run `mkdir -p "${CLAUDE_PLUGIN_DATA}/profiles"` before writing. Claude Code creates `${CLAUDE_PLUGIN_DATA}` on first reference, but the `profiles/` subdirectory inside it needs to be created explicitly.
+2. Write the complete `car-profile.json` to `${CLAUDE_PLUGIN_DATA}/profiles/{profile-name}.json`
+3. Generate a `${CLAUDE_PLUGIN_DATA}/references/{profile-name}-specs.md` file with human-readable spec identification guidance (adapted from the spec_options and search_terms). This is user-generated reference material, not a bundled plugin asset, so it lives in the data directory alongside the profile.
+4. Present a summary of the profile to the user for review
+5. Offer to run the first search immediately using the new profile
 
 ## Validation
 
@@ -141,8 +151,8 @@ Before writing the profile:
 
 ## Updating an Existing Profile
 
-If a profile already exists for the requested car:
-1. Load the existing profile
+If a profile already exists for the requested car in `${CLAUDE_PLUGIN_DATA}/profiles/`:
+1. Load the existing profile from that location
 2. Show the user what's currently configured
 3. Ask which sections they want to update
-4. Merge changes and write the updated profile
+4. Merge changes and write the updated profile back to the same path

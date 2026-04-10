@@ -7,7 +7,7 @@ Search UK car listing websites for used cars matching the active car profile. Us
 
 Follow these steps:
 
-1. Read the available profiles in `${CLAUDE_PLUGIN_ROOT}/profiles/` to find `.json` profile files.
+1. Read the available profiles in `${CLAUDE_PLUGIN_DATA}/profiles/` to find `.json` profile files. If the directory does not exist or is empty, instruct the user to run `/setup-car` first.
 2. If multiple profiles exist, ask the user which car to search for. If only one exists, use it.
 3. Load the selected car profile JSON.
 4. Read the skill file at `${CLAUDE_PLUGIN_ROOT}/skills/car-search/SKILL.md` for the full search process.
@@ -16,7 +16,7 @@ Follow these steps:
 7. Search each source, extracting data points as defined in the skill.
 8. Deduplicate listings that appear on multiple platforms.
 9. Present results in a markdown table with direct links to each listing.
-10. Save the search report and CSV data to the `{profile_name}-searches/` folder.
+10. Save the search report and CSV data to the `{profile_name}-searches/` folder in the user's current workspace (not the plugin data directory - these are project artefacts the user wants to see alongside other files).
 11. Compare against previous search reports for volatility analysis if available.
 
 If $ARGUMENTS contains filter terms (e.g. "RS only", "under 60k", "blue"), apply those filters instead of the profile defaults.
