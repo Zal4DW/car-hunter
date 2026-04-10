@@ -212,6 +212,22 @@ reviews:
         a different format (JSON, YAML). The markdown-with-headings format
         is required by Claude Code's rule loader.
 
+        PATH REFERENCES: These rule files are dev-time documentation.
+        When they refer to source files in the repository (for example
+        `car-hunter/scripts/build_dashboard.py`, `car-hunter/docs/car-profile-schema.md`,
+        or `SKILL.md`), they use repo-relative paths deliberately so
+        developers reading the rule can navigate directly to the file
+        they are being told about. Do NOT suggest replacing these
+        repo-relative paths with `${CLAUDE_PLUGIN_ROOT}/...`. That
+        variable is only meaningful at runtime for bundled assets
+        referenced from inside skills, commands, or the installed
+        plugin scripts - not for dev-time rules describing source files.
+
+        The three-tier path model (PLUGIN_ROOT/PLUGIN_DATA/workspace)
+        applies to runtime behaviour of skills and commands. Rule
+        documentation about the repo layout does not need to go through
+        it.
+
     # --- Plugin manifest ---
     - path: "car-hunter/.claude-plugin/plugin.json"
       instructions: |
