@@ -1,0 +1,108 @@
+Creative Commons Attribution-NonCommercial 4.0 International (CC BY-NC 4.0)
+
+Copyright (c) 2026 Paul Bratcher / Prosper Consulting
+
+=======================================================================
+
+Car Hunter - Claude Code Plugin
+https://github.com/Zal4DW/car-hunter
+
+This work is licensed under the Creative Commons Attribution-NonCommercial 4.0
+International License.
+
+=======================================================================
+
+YOU ARE FREE TO:
+
+  - Share: Copy and redistribute the material in any medium or format
+  - Adapt: Remix, transform, and build upon the material
+
+  The licensor cannot revoke these freedoms as long as you follow the
+  license terms.
+
+UNDER THE FOLLOWING TERMS:
+
+  - Attribution: You must give appropriate credit, provide a link to the
+    license, and indicate if changes were made. You may do so in any
+    reasonable manner, but not in any way that suggests the licensor
+    endorses you or your use.
+
+  - NonCommercial: You may not use the material for commercial purposes.
+    This includes, but is not limited to, reselling the plugin, offering
+    it as part of a paid service, or using it to power a commercial car
+    dealership, broker, or valuation tool.
+
+  - No additional restrictions: You may not apply legal terms or
+    technological measures that legally restrict others from doing
+    anything the license permits.
+
+NOTICES:
+
+  You do not have to comply with the license for elements of the material
+  in the public domain or where your use is permitted by an applicable
+  exception or limitation.
+
+  No warranties are given. The license may not give you all of the
+  permissions necessary for your intended use. For example, other rights
+  such as publicity, privacy, or moral rights may limit how you use the
+  material.
+
+=======================================================================
+
+DISCLAIMER OF WARRANTIES AND LIMITATION OF LIABILITY:
+
+THIS SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+Car Hunter is a buyer intelligence tool. It does NOT provide financial,
+investment, or purchase advice. Regression-based value scores, depreciation
+estimates, and "deal" classifications are statistical approximations based
+on the data supplied and may not reflect true market value, vehicle
+condition, accident history, or mechanical soundness. Always verify
+listings independently, inspect vehicles in person, and consult qualified
+professionals before making a purchase decision.
+
+Listing data is fetched from third-party websites (AutoTrader, Cazoo,
+Cinch, CarWow, manufacturer programmes, and dealer groups). The author(s)
+make no guarantee about the accuracy, completeness, or freshness of that
+data, and are not affiliated with, endorsed by, or sponsored by any of
+those platforms. Users are responsible for complying with each site's
+terms of service when running searches.
+
+Use at your own risk and discretion.
+
+=======================================================================
+
+ATTRIBUTION REQUIREMENTS:
+
+When sharing or adapting this work, please include:
+
+  "Car Hunter plugin by Paul Bratcher
+   https://github.com/Zal4DW/car-hunter
+   Licensed under CC BY-NC 4.0"
+
+=======================================================================
+
+PAY IT FORWARD
+
+This plugin is provided as-is, for free, with a pay-it-forward mindset.
+
+We built this to help private buyers navigate the often frustrating
+process of finding a fairly-priced used car. If this plugin helps you on
+your search:
+
+  1. CONNECT with us on LinkedIn: https://www.linkedin.com/in/paul-bratcher/
+  2. SHARE this plugin with others who might benefit
+  3. TELL US your success story in the GitHub Discussions tab
+
+Use it, improve it, share it. Just keep it non-commercial and give credit.
+
+=======================================================================
+
+Full legal text of CC BY-NC 4.0:
+https://creativecommons.org/licenses/by-nc/4.0/legalcode
