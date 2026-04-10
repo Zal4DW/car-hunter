@@ -4,6 +4,14 @@ version = "0.0.0"
 description = "Test harness for the Car Hunter Claude Code plugin. Not shipped with the plugin."
 requires-python = ">=3.10"
 
+[project.optional-dependencies]
+test = [
+    "pytest>=8",
+    "pytest-cov>=5",
+    "coverage>=7",
+    "beautifulsoup4>=4.12",
+]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 python_files = ["test_*.py"]

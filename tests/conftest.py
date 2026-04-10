@@ -10,6 +10,7 @@ marketplace manifest at `.claude-plugin/marketplace.json` can source it. Tests
 stay at the repo root.
 """
 
+import os
 import json
 import sys
 from pathlib import Path
@@ -84,3 +85,25 @@ def spec_options(loaded_profile: dict) -> list:
 @pytest.fixture(scope="session")
 def variant_by_name(loaded_profile: dict) -> dict:
     return {v["name"]: v for v in loaded_profile["variants"]}
+
+
+@pytest.fixture(scope="session")
+def subprocess_env(project_root: Path) -> dict:
+    """Env vars to pass to builder subprocesses so coverage traces them.
+
+    Sets COVERAGE_PROCESS_START and adds tests/coverage_support to
+    PYTHONPATH so the subprocess picks up sitecustomize.py and starts
+    recording coverage before build_dashboard.py imports anything.
+    """
+    env = os.environ.copy()
+    coverage_support = project_root / "tests" / "coverage_support"
+    coverage_config = project_root / "pyproject.toml"
+    if coverage_support.is_dir() and coverage_config.is_file():
+        env["COVERAGE_PROCESS_START"] = str(coverage_config)
+        existing_pythonpath = env.get("PYTHONPATH", "")
+        env["PYTHONPATH"] = (
+            f"{coverage_support}{os.pathsep}{existing_pythonpath}"
+            if existing_pythonpath
+            else str(coverage_support)
+        )
+    return env

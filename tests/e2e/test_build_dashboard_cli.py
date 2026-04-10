@@ -11,29 +11,11 @@ PYTHONPATH. `coverage combine` afterwards merges the subprocess datafiles
 with the in-process ones so the final report covers build_dashboard.py too.
 """
 
-import os
 import subprocess
 import sys
 from pathlib import Path
 
 import pytest
-
-
-@pytest.fixture
-def subprocess_env(project_root: Path) -> dict:
-    """Env vars to pass to builder subprocesses so coverage traces them."""
-    env = os.environ.copy()
-    coverage_support = project_root / "tests" / "coverage_support"
-    coverage_config = project_root / "pyproject.toml"
-    if coverage_support.is_dir() and coverage_config.is_file():
-        env["COVERAGE_PROCESS_START"] = str(coverage_config)
-        existing_pythonpath = env.get("PYTHONPATH", "")
-        env["PYTHONPATH"] = (
-            f"{coverage_support}{os.pathsep}{existing_pythonpath}"
-            if existing_pythonpath
-            else str(coverage_support)
-        )
-    return env
 
 
 @pytest.fixture
