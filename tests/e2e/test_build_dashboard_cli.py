@@ -159,3 +159,123 @@ class TestBuilderFailsHelpfully:
             env=subprocess_env,
         )
         assert result.returncode != 0
+
+
+class TestBuilderEdgeCases:
+    """Cover conditional branches the main happy path doesn't exercise.
+
+    The primary fixture (acme-bolt) is a single-generation profile with a
+    full dataset, listing_id_date_encoding disabled, and no sidecar state.
+    These tests use additional fixtures to hit the remaining branches in
+    build_dashboard.py without regressing the main-path coverage.
+    """
+
+    def _run(self, builder_script, profile, csv, tmp_path, subprocess_env, extra_args=None):
+        output_html = tmp_path / "edge-dashboard.html"
+        args = [
+            sys.executable,
+            str(builder_script),
+            "--profile",
+            str(profile),
+            "--csv",
+            str(csv),
+            "--output",
+            str(output_html),
+            "--date",
+            "2026-04-10",
+        ]
+        if extra_args:
+            args.extend(extra_args)
+        result = subprocess.run(args, capture_output=True, text=True, env=subprocess_env)
+        return result, output_html
+
+    def test_sparse_csv_triggers_regression_fallback(
+        self,
+        tmp_path: Path,
+        builder_script: Path,
+        fixture_profile_path: Path,
+        fixture_sparse_csv_path: Path,
+        subprocess_env: dict,
+    ):
+        """Three-row CSV: fewer rows than regression features, so the builder
+        must fall back to zero-coefficients without crashing.
+
+        Also covers:
+          - `continue` branch when a variant has <5 depreciation-curve points
+          - `pm_trend = []` branch when there are <=5 total used listings
+          - "insufficient data" branch in the spec-premium calculation
+        """
+        result, output_html = self._run(
+            builder_script,
+            fixture_profile_path,
+            fixture_sparse_csv_path,
+            tmp_path,
+            subprocess_env,
+        )
+        assert result.returncode == 0, f"builder failed: {result.stderr}"
+        assert "Loaded 3 listings" in result.stdout
+        assert "WARNING: Not enough data for regression" in result.stdout
+        assert output_html.exists()
+        assert output_html.stat().st_size > 0
+
+    def test_multigen_profile_emits_generation_filter_js(
+        self,
+        tmp_path: Path,
+        builder_script: Path,
+        fixture_multigen_profile_path: Path,
+        fixture_csv_path: Path,
+        subprocess_env: dict,
+    ):
+        """Multi-generation profile (>1 entry in `generations[]`) triggers
+        the dashboard's generation-filter JavaScript emission branch.
+
+        The fixture CSV only contains mk1 rows but that is fine - the branch
+        fires on the profile shape, not the CSV contents.
+        """
+        result, output_html = self._run(
+            builder_script,
+            fixture_multigen_profile_path,
+            fixture_csv_path,
+            tmp_path,
+            subprocess_env,
+        )
+        assert result.returncode == 0, f"builder failed: {result.stderr}"
+        html = output_html.read_text()
+        # Both generation names from the multigen profile should appear in
+        # the embedded filter map.
+        assert "mk1" in html
+        assert "mk2" in html
+        # Both gen labels should also be present somewhere in the page chrome.
+        assert "Mk1" in html
+        assert "Mk2" in html
+
+    def test_listing_state_sidecar_populates_autotrader_urls(
+        self,
+        tmp_path: Path,
+        builder_script: Path,
+        fixture_multigen_profile_path: Path,
+        fixture_csv_path: Path,
+        fixture_listing_state_path: Path,
+        subprocess_env: dict,
+    ):
+        """The multigen fixture has listing_id_date_encoding enabled. When
+        a --listing-state sidecar provides matching composite keys the
+        builder must construct AutoTrader URLs and calculate days-on-market
+        for those rows.
+        """
+        result, output_html = self._run(
+            builder_script,
+            fixture_multigen_profile_path,
+            fixture_csv_path,
+            tmp_path,
+            subprocess_env,
+            extra_args=["--listing-state", str(fixture_listing_state_path)],
+        )
+        assert result.returncode == 0, f"builder failed: {result.stderr}"
+        assert "Loaded listing state" in result.stdout
+        assert "5 listing IDs" in result.stdout
+        assert "4 price changes" in result.stdout
+        html = output_html.read_text()
+        # The AutoTrader URL for at least one listing should appear in the
+        # embedded table data.
+        assert "autotrader.co.uk/car-details/202601150000001" in html

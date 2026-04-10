@@ -1,0 +1,4 @@
+variant,generation,price,year,reg,reg_date,age_years,mileage,new_price,depreciation_total,depreciation_pa,has_sunroof,has_premium_audio,has_heated_seats,options_count,location,is_brand_new_stock
+Bolt Base,mk1,40000,2024,74,2024.75,1.5,14000,45000,5000,3333,False,False,False,0,Testville,False
+Bolt Base,mk1,35000,2023,73,2023.75,2.5,25000,45000,10000,4000,True,False,True,2,Fakeborough,False
+Bolt Base,mk1,28000,2022,22,2022.25,4.0,42000,45000,17000,4250,False,True,False,1,Mockchester,False

@@ -1,0 +1,15 @@
+{
+  "listing_ids": {
+    "42500_Testville": "202601150000001",
+    "40000_Fakeborough": "202602050000002",
+    "37000_Mockchester": "202602200000003",
+    "55000_Sampleton": "202603010000004",
+    "49000_Testville": "202603250000005"
+  },
+  "price_changes": {
+    "42500_Testville": -500,
+    "40000_Fakeborough": -1000,
+    "55000_Sampleton": 0,
+    "49000_Testville": -1500
+  }
+}

@@ -56,6 +56,21 @@ def fixture_csv_path() -> Path:
 
 
 @pytest.fixture(scope="session")
+def fixture_multigen_profile_path() -> Path:
+    return FIXTURES_DIR / "acme-bolt-multigen.json"
+
+
+@pytest.fixture(scope="session")
+def fixture_sparse_csv_path() -> Path:
+    return FIXTURES_DIR / "acme-bolt-sparse.csv"
+
+
+@pytest.fixture(scope="session")
+def fixture_listing_state_path() -> Path:
+    return FIXTURES_DIR / "acme-bolt-listing-state.json"
+
+
+@pytest.fixture(scope="session")
 def loaded_profile(fixture_profile_path: Path) -> dict:
     with fixture_profile_path.open() as f:
         return json.load(f)
