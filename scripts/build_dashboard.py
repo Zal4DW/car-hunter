@@ -1042,3 +1042,4 @@ with open(OUTPUT_PATH, 'w') as f:
 file_size = os.path.getsize(OUTPUT_PATH)
 print(f"\nDashboard written to {OUTPUT_PATH}")
 print(f"File size: {file_size:,} bytes ({file_size // 1024} KB)")
+

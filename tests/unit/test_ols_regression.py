@@ -69,3 +69,4 @@ class TestEdgeCases:
         coeffs, _ = ols_regression(X, y)
         # Should return finite values, not NaN or raise
         assert all(math.isfinite(c) for c in coeffs)
+

@@ -34,3 +34,4 @@ class TestPoly2Fit:
         ]
         _, b, _ = fit_poly2(_points(pairs))
         assert b < 0
+

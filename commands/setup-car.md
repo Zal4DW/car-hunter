@@ -17,3 +17,4 @@ Follow these steps:
 6. Write the completed profile to `${CLAUDE_PLUGIN_DATA}/profiles/{profile-name}.json`.
 7. Generate the spec reference file at `${CLAUDE_PLUGIN_DATA}/references/{profile-name}-specs.md`.
 8. Offer to run the first search.
+

@@ -43,3 +43,4 @@ Skills use **model-based activation**, not user search. Do not add:
 7. **Important Notes** - gotchas, edge cases, deduplication rules
 
 Keep skills under ~250 lines. If longer, move reference material to `skills/{name}/docs/` and link from SKILL.md.
+
