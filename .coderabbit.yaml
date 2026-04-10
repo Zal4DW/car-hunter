@@ -154,20 +154,17 @@ reviews:
     # --- Python source ---
     - path: "scripts/*.py"
       instructions: |
-        Python code targets Python >= 3.9 (see .github/workflows/test.yml
-        matrix: 3.9, 3.11, 3.12). Do not suggest features only available in
-        3.10+:
-        - No structural pattern matching (`match`/`case`)
-        - No `X | Y` union syntax in runtime-evaluated annotations
-          (it is safe inside a stringified annotation, i.e. with
-          `from __future__ import annotations`, but not at runtime)
-        - No `typing.ParamSpec`, `typing.Concatenate`, `typing.TypeAlias`,
-          `typing.TypeGuard`, or `typing.Self` unless imported from
-          `typing_extensions` (Python 3.9 lacks them in the stdlib and
-          `from __future__ import annotations` does NOT backport them -
-          it only defers annotation evaluation)
-        - No `zoneinfo.ZoneInfo` in a tzdata-less context without a
-          fallback to `backports.zoneinfo`
+        Python code targets Python >= 3.10 (see .github/workflows/test.yml
+        matrix: 3.10, 3.11, 3.12). Structural pattern matching, `X | Y`
+        union syntax, `typing.ParamSpec`, `typing.Concatenate`, and
+        `typing.TypeAlias` are all fair game.
+
+        Do not suggest features only available in 3.11+ without a guard:
+        - `typing.Self` (3.11+)
+        - `tomllib` (3.11+ - use tomli on 3.10)
+        - `typing.Never`, `typing.LiteralString`, `typing.assert_type`,
+          `typing.reveal_type`, and PEP 654 exception groups (`except*`,
+          `ExceptionGroup`) - all 3.11+
 
         The builder is intentionally stdlib-only - no numpy, pandas, scipy,
         jinja2, or other external dependencies. The OLS regression is
@@ -238,7 +235,7 @@ reviews:
         variables first. Our workflows currently only use `matrix.*`
         variables which are safe (internal CI inputs, not user content).
 
-        Python version matrix: 3.9, 3.11, 3.12. If you suggest bumping,
+        Python version matrix: 3.10, 3.11, 3.12. If you suggest bumping,
         also update scripts/*.py path_instructions above.
 
     # --- Coverage and test configuration ---
