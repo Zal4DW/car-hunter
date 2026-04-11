@@ -205,7 +205,7 @@ class TestChartJsIntegration:
 
 
 class TestFilterControls:
-    """The dashboard exposes five filter dropdowns that cascade through
+    """The dashboard exposes six filter dropdowns that cascade through
     every chart, KPI card, and table row."""
 
     EXPECTED_SELECT_IDS = frozenset(
@@ -219,7 +219,7 @@ class TestFilterControls:
         }
     )
 
-    def test_all_five_filter_selects_present(self, soup: BeautifulSoup):
+    def test_all_six_filter_selects_present(self, soup: BeautifulSoup):
         selects = soup.find_all("select")
         found_ids = {s.get("id") for s in selects}
         assert self.EXPECTED_SELECT_IDS.issubset(found_ids), (
