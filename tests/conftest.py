@@ -72,6 +72,25 @@ def fixture_listing_state_path() -> Path:
 
 
 @pytest.fixture(scope="session")
+def fixture_dated_csvs() -> list[Path]:
+    return [
+        FIXTURES_DIR / "acme-bolt-all-listings-2026-03-13.csv",
+        FIXTURES_DIR / "acme-bolt-all-listings-2026-03-27.csv",
+        FIXTURES_DIR / "acme-bolt-all-listings-2026-04-10.csv",
+    ]
+
+
+@pytest.fixture(scope="session")
+def fixture_watchlist_path() -> Path:
+    return FIXTURES_DIR / "acme-bolt-watchlist.json"
+
+
+@pytest.fixture(scope="session")
+def fixture_capture_manifest_path() -> Path:
+    return FIXTURES_DIR / "acme-bolt-capture-2026-04-10.json"
+
+
+@pytest.fixture(scope="session")
 def loaded_profile(fixture_profile_path: Path) -> dict:
     with fixture_profile_path.open() as f:
         return json.load(f)

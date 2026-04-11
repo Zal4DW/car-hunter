@@ -157,6 +157,7 @@ class TestChartJsIntegration:
 
     EXPECTED_CANVAS_IDS = frozenset(
         {
+            "timeSeriesChart",
             "depCurveChart",
             "dealScoreChart",
             "specPremiumChart",
@@ -187,10 +188,10 @@ class TestChartJsIntegration:
             f"no remote Chart.js script tag found; srcs: {srcs}"
         )
 
-    def test_exactly_five_canvases_present(self, soup: BeautifulSoup):
+    def test_exactly_six_canvases_present(self, soup: BeautifulSoup):
         canvases = soup.find_all("canvas")
-        assert len(canvases) == 5, (
-            f"expected exactly 5 canvases, found {len(canvases)}: "
+        assert len(canvases) == 6, (
+            f"expected exactly 6 canvases, found {len(canvases)}: "
             f"{[c.get('id') for c in canvases]}"
         )
 
@@ -214,6 +215,7 @@ class TestFilterControls:
             "filterMileage",
             "filterBudget",
             "filterValue",
+            "filterWatch",
         }
     )
 
@@ -264,6 +266,10 @@ class TestEmbeddedJsonBlocks:
         "PM_TREND",
         "VARIANT_COLOURS",
         "HIGHLIGHT_SPECS",
+        "WATCHLIST",
+        "TIME_SERIES",
+        "PULSE_SINCE",
+        "CAPTURE",
     )
 
     def _extract_blob(self, html_text: str, name: str) -> str:
@@ -299,6 +305,10 @@ class TestEmbeddedJsonBlocks:
             "PM_TREND",
             "VARIANT_COLOURS",
             "HIGHLIGHT_SPECS",
+            "WATCHLIST",
+            "TIME_SERIES",
+            "PULSE_SINCE",
+            "CAPTURE",
         ],
     )
     def test_blob_parses_as_json(self, built_html: str, name: str):

@@ -11,6 +11,7 @@ PYTHONPATH. `coverage combine` afterwards merges the subprocess datafiles
 with the in-process ones so the final report covers build_dashboard.py too.
 """
 
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -364,3 +365,130 @@ class TestBuilderEdgeCases:
         )
         assert result.returncode != 0
         assert expected_token in (result.stderr + result.stdout)
+
+
+class TestSnapshotPipeline:
+    """Exercise the snapshot glob + watchlist + capture manifest pipeline.
+
+    Stages three dated CSVs containing a listing_id column into a tmp
+    directory and runs the builder against the latest. The builder should
+    load all three snapshots, diff today against the previous snapshot,
+    emit a 28-entry rolling time series, pick up the watchlist, and render
+    the capture badge.
+    """
+
+    def _run(self, builder_script, profile, csv, tmp_path, subprocess_env, extra=None):
+        output_html = tmp_path / "snap-dash.html"
+        args = [
+            sys.executable,
+            str(builder_script),
+            "--profile",
+            str(profile),
+            "--csv",
+            str(csv),
+            "--output",
+            str(output_html),
+            "--date",
+            "2026-04-10",
+        ]
+        if extra:
+            args.extend(extra)
+        result = subprocess.run(
+            args,
+            capture_output=True,
+            text=True,
+            env=subprocess_env,
+            timeout=BUILDER_TIMEOUT_SECONDS,
+        )
+        return result, output_html
+
+    def _stage(self, tmp_path: Path, fixture_dated_csvs) -> Path:
+        for p in fixture_dated_csvs:
+            (tmp_path / p.name).write_bytes(p.read_bytes())
+        return tmp_path / fixture_dated_csvs[-1].name
+
+    def test_builder_loads_all_snapshots(
+        self,
+        tmp_path: Path,
+        builder_script: Path,
+        fixture_profile_path: Path,
+        fixture_dated_csvs: list,
+        subprocess_env: dict,
+    ):
+        latest = self._stage(tmp_path, fixture_dated_csvs)
+        result, output_html = self._run(
+            builder_script, fixture_profile_path, latest, tmp_path, subprocess_env
+        )
+        assert result.returncode == 0, f"builder failed: {result.stderr}"
+        assert "Loaded 3 snapshots" in result.stdout
+        assert "Snapshot diff vs 2026-03-27" in result.stdout
+
+    def test_time_series_has_28_entries(
+        self,
+        tmp_path: Path,
+        builder_script: Path,
+        fixture_profile_path: Path,
+        fixture_dated_csvs: list,
+        subprocess_env: dict,
+    ):
+        latest = self._stage(tmp_path, fixture_dated_csvs)
+        result, output_html = self._run(
+            builder_script, fixture_profile_path, latest, tmp_path, subprocess_env
+        )
+        assert result.returncode == 0
+        html = output_html.read_text()
+        match = re.search(r"const TIME_SERIES\s*=\s*", html)
+        assert match, "TIME_SERIES constant missing"
+        import json as _json
+        value, _ = _json.JSONDecoder().raw_decode(html[match.end():])
+        assert isinstance(value, list)
+        assert len(value) == 28
+        assert value[-1]["date"] == "2026-04-10"
+
+    def test_watchlist_marks_matching_row(
+        self,
+        tmp_path: Path,
+        builder_script: Path,
+        fixture_profile_path: Path,
+        fixture_dated_csvs: list,
+        fixture_watchlist_path: Path,
+        subprocess_env: dict,
+    ):
+        latest = self._stage(tmp_path, fixture_dated_csvs)
+        (tmp_path / "acme-bolt-watchlist.json").write_bytes(
+            fixture_watchlist_path.read_bytes()
+        )
+        result, output_html = self._run(
+            builder_script, fixture_profile_path, latest, tmp_path, subprocess_env
+        )
+        assert result.returncode == 0, f"builder failed: {result.stderr}"
+        assert "Loaded watchlist: 1" in result.stdout
+        html = output_html.read_text()
+        # The ALL_DATA row for the watched listing_id should have watched: true
+        match = re.search(r"const ALL_DATA\s*=\s*", html)
+        import json as _json
+        data, _ = _json.JSONDecoder().raw_decode(html[match.end():])
+        watched = [r for r in data if r.get("listing_id") == "202601150000000"]
+        assert len(watched) == 1
+        assert watched[0]["watched"] is True
+
+    def test_capture_manifest_amber_badge(
+        self,
+        tmp_path: Path,
+        builder_script: Path,
+        fixture_profile_path: Path,
+        fixture_dated_csvs: list,
+        fixture_capture_manifest_path: Path,
+        subprocess_env: dict,
+    ):
+        latest = self._stage(tmp_path, fixture_dated_csvs)
+        (tmp_path / "acme-bolt-capture-2026-04-10.json").write_bytes(
+            fixture_capture_manifest_path.read_bytes()
+        )
+        result, output_html = self._run(
+            builder_script, fixture_profile_path, latest, tmp_path, subprocess_env
+        )
+        assert result.returncode == 0, f"builder failed: {result.stderr}"
+        assert "Capture: partial" in result.stdout
+        html = output_html.read_text()
+        assert "capture-badge-amber" in html

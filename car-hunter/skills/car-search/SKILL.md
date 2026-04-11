@@ -84,6 +84,40 @@ Use the `profile.spec_options[].search_terms` to identify which optional feature
 
 Many cars appear on multiple platforms. Deduplicate by matching on price + year + mileage + dealer location. When a duplicate is found, link to both sources but count it as one listing.
 
+## Capture completeness
+
+The dashboard now diffs snapshots automatically. For the diff to be meaningful, each search run must be exhaustive and must record what was actually captured - otherwise a missed page on one day looks like a "sold" car on the next.
+
+### Paginate exhaustively
+
+For each source URL, follow `?page=N` (or the site's equivalent) until a page returns zero new listings. Do not stop at the first page. On AutoTrader, read the pagination footer ("Page 1 of 4") to know the expected count.
+
+### Record every source touched
+
+For each source, track:
+
+- `name` - short label (AutoTrader, Cazoo, Cinch, dealer group name)
+- `url` - the base URL template used
+- `expected_pages` - page count from the pagination footer
+- `captured_pages` - how many pages you actually walked
+- `status` - one of `ok` (all pages walked cleanly), `partial` (some pages skipped, timed out, or errored), `failed` (source unreachable)
+
+### Write a capture manifest
+
+Save a JSON manifest alongside the CSV at `{profile.profile_name}-searches/{profile.profile_name}-capture-{YYYY-MM-DD}.json`:
+
+```json
+{
+  "sources": [
+    {"name": "AutoTrader", "url": "...", "expected_pages": 4, "captured_pages": 4, "status": "ok"},
+    {"name": "Cazoo",      "url": "...", "expected_pages": 3, "captured_pages": 2, "status": "partial"}
+  ],
+  "total_captured": 37
+}
+```
+
+The dashboard builder reads this file and renders a capture badge (green / amber / red) in the header so anyone viewing the dashboard knows whether the day's counts are trustworthy.
+
 ## Data Points to Extract
 
 For each listing, capture:
@@ -151,19 +185,22 @@ For listings on other platforms without date encoding, check previous search rep
 
 ### Volatility Metrics
 
-When a previous search report exists in the archive folder, include a **Volatility Analysis** section:
-
-1. **Price Changes** -- identify any car whose asking price changed between searches
-2. **Listings Removed** -- cars present previously but absent today (likely sold)
-3. **New Listings** -- cars appearing for the first time
-4. **Days on Market** -- average, median, and longest-listed car
-5. **Summary Statistics:** total today vs previous, price reductions/increases, average change, sold count, new arrivals, net supply change
+Volatility analysis is now handled automatically by the dashboard builder. As long as every snapshot CSV carries a `listing_id` column, the builder diffs the latest snapshot against the previous dated CSV in the same folder and computes new arrivals, removed listings, and price changes itself. You no longer need to hand-maintain a `{profile}-listing-state.json` sidecar or recalculate deltas in the search report.
 
 ## CSV Data Collection
 
 After presenting the search results, also compile the data into a CSV file for the dashboard builder. The CSV columns are:
 
-Fixed: `variant`, `generation`, `price`, `year`, `reg`, `reg_date`, `age_years`, `mileage`, `new_price`, `depreciation_total`, `depreciation_pa`, `depreciation_pct`
+Fixed: `listing_id`, `variant`, `generation`, `price`, `year`, `reg`, `reg_date`, `age_years`, `mileage`, `new_price`, `depreciation_total`, `depreciation_pa`, `depreciation_pct`
+
+### `listing_id` (stable cross-run identifier)
+
+This is the **first** column and is what lets the dashboard match the same car across successive searches. Populate it as follows:
+
+- **AutoTrader:** the 15-digit numeric id after `/car-details/` in the listing URL (e.g. `https://www.autotrader.co.uk/car-details/202602179980029` -> `202602179980029`). The first 8 digits double as the first-listed date.
+- **Other sources:** use `{source}:{12-char sha1 of the listing URL}` so the id is stable if you re-scrape the same listing. Never invent composite keys from price + location - they move when the dealer drops the price.
+
+Leave the column empty only as a last resort. An empty `listing_id` opts that row out of the snapshot diff and the watchlist.
 
 Dynamic (from profile.spec_options): one boolean column per spec option using the `key` field (e.g. `has_bo`, `has_massage`)
 

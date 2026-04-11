@@ -1,0 +1,19 @@
+{
+  "sources": [
+    {
+      "name": "AutoTrader",
+      "url": "https://www.autotrader.co.uk/car-search?make=Acme&model=Bolt",
+      "expected_pages": 4,
+      "captured_pages": 4,
+      "status": "ok"
+    },
+    {
+      "name": "Cazoo",
+      "url": "https://www.cazoo.co.uk/used-cars/acme/bolt",
+      "expected_pages": 3,
+      "captured_pages": 2,
+      "status": "partial"
+    }
+  ],
+  "total_captured": 19
+}
