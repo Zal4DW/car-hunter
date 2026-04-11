@@ -6,11 +6,14 @@ from dashboard_lib import rolling_window
 
 
 def snap(d, ids, median=0):
+    """Snap."""
     return {"date": d, "ids": set(ids), "median_price": median}
 
 
 class TestRollingWindow:
+    """Rolling window test cases."""
     def test_returns_one_entry_per_day(self):
+        """Returns one entry per day."""
         today = date(2026, 4, 10)
         series = rolling_window([], today, days=7)
         assert len(series) == 7
@@ -18,6 +21,7 @@ class TestRollingWindow:
         assert series[-1]["date"] == "2026-04-10"
 
     def test_gap_filling_carries_previous_state(self):
+        """Gap filling carries previous state."""
         today = date(2026, 4, 10)
         snaps = [
             snap(date(2026, 4, 8), ["a", "b", "c"], median=30000),
@@ -32,6 +36,7 @@ class TestRollingWindow:
         assert series[4]["median"] == 30000
 
     def test_new_and_removed_computed_against_previous_snapshot(self):
+        """New and removed computed against previous snapshot."""
         today = date(2026, 4, 10)
         snaps = [
             snap(date(2026, 4, 8), ["a", "b"], median=100),
@@ -46,6 +51,7 @@ class TestRollingWindow:
         assert last["median"] == 120
 
     def test_snapshots_older_than_window_seed_prior_state(self):
+        """Snapshots older than window seed prior state."""
         today = date(2026, 4, 10)
         snaps = [
             snap(date(2026, 3, 1), ["a", "b", "c"], median=50),

@@ -33,6 +33,7 @@ def dashboard_output(
     fixture_csv_path: Path,
     subprocess_env: dict,
 ):
+    """Dashboard output."""
     output_html = tmp_path / "acme-bolt-dashboard.html"
     result = subprocess.run(
         [
@@ -56,7 +57,9 @@ def dashboard_output(
 
 
 class TestBuilderExitStatus:
+    """Builder exit status test cases."""
     def test_builder_exits_cleanly(self, dashboard_output):
+        """Builder exits cleanly."""
         result, _ = dashboard_output
         assert result.returncode == 0, (
             f"Builder failed:\nstdout: {result.stdout}\nstderr: {result.stderr}"
@@ -64,41 +67,51 @@ class TestBuilderExitStatus:
 
 
 class TestBuilderStdout:
+    """Builder stdout test cases."""
     def test_reports_loaded_listing_count(self, dashboard_output):
+        """Reports loaded listing count."""
         result, _ = dashboard_output
         assert "Loaded 19 listings" in result.stdout
 
     def test_reports_regression_r_squared(self, dashboard_output):
+        """Reports regression r squared."""
         result, _ = dashboard_output
         assert "Regression R" in result.stdout
 
     def test_reports_profile_display_name(self, dashboard_output):
+        """Reports profile display name."""
         result, _ = dashboard_output
         assert "Acme Bolt EV" in result.stdout
 
     def test_excludes_brand_new_stock_from_regression(self, dashboard_output):
+        """Excludes brand new stock from regression."""
         # Fixture has 19 total, 1 brand new, 18 used with age >= 0.5
         result, _ = dashboard_output
         assert "Regression on 18 used listings" in result.stdout
 
 
 class TestBuilderOutput:
+    """Builder output test cases."""
     def test_writes_html_file(self, dashboard_output):
+        """Writes html file."""
         _, output_html = dashboard_output
         assert output_html.exists(), "dashboard HTML was not written"
         assert output_html.stat().st_size > 0
 
     def test_html_contains_profile_title(self, dashboard_output):
+        """Html contains profile title."""
         _, output_html = dashboard_output
         html = output_html.read_text()
         assert "Acme Bolt EV" in html
 
     def test_html_includes_chartjs(self, dashboard_output):
+        """Html includes chartjs."""
         _, output_html = dashboard_output
         html = output_html.read_text()
         assert "chart.js" in html.lower() or "chart.umd" in html.lower()
 
     def test_html_renders_both_variants(self, dashboard_output):
+        """Html renders both variants."""
         _, output_html = dashboard_output
         html = output_html.read_text()
         assert "Bolt Base" in html
@@ -106,6 +119,7 @@ class TestBuilderOutput:
 
 
 class TestBuilderFailsHelpfully:
+    """Builder fails helpfully test cases."""
     def test_missing_profile_returns_nonzero(
         self,
         tmp_path: Path,
@@ -113,6 +127,7 @@ class TestBuilderFailsHelpfully:
         fixture_csv_path: Path,
         subprocess_env: dict,
     ):
+        """Missing profile returns nonzero."""
         result = subprocess.run(
             [
                 sys.executable,
@@ -136,6 +151,7 @@ class TestBuilderFailsHelpfully:
         fixture_profile_path: Path,
         subprocess_env: dict,
     ):
+        """Missing csv returns nonzero."""
         result = subprocess.run(
             [
                 sys.executable,
@@ -163,6 +179,7 @@ class TestBuilderEdgeCases:
     """
 
     def _run(self, builder_script, profile, csv, tmp_path, subprocess_env, extra_args=None):
+        """Run."""
         output_html = tmp_path / "edge-dashboard.html"
         args = [
             sys.executable,
@@ -378,6 +395,7 @@ class TestSnapshotPipeline:
     """
 
     def _run(self, builder_script, profile, csv, tmp_path, subprocess_env, extra=None):
+        """Run."""
         output_html = tmp_path / "snap-dash.html"
         args = [
             sys.executable,
@@ -403,6 +421,7 @@ class TestSnapshotPipeline:
         return result, output_html
 
     def _stage(self, tmp_path: Path, fixture_dated_csvs) -> Path:
+        """Stage."""
         for p in fixture_dated_csvs:
             (tmp_path / p.name).write_bytes(p.read_bytes())
         latest = max(fixture_dated_csvs, key=lambda p: p.name)
@@ -416,6 +435,7 @@ class TestSnapshotPipeline:
         fixture_dated_csvs: list,
         subprocess_env: dict,
     ):
+        """Builder loads all snapshots."""
         latest = self._stage(tmp_path, fixture_dated_csvs)
         result, output_html = self._run(
             builder_script, fixture_profile_path, latest, tmp_path, subprocess_env
@@ -432,6 +452,7 @@ class TestSnapshotPipeline:
         fixture_dated_csvs: list,
         subprocess_env: dict,
     ):
+        """Time series has 28 entries."""
         latest = self._stage(tmp_path, fixture_dated_csvs)
         result, output_html = self._run(
             builder_script, fixture_profile_path, latest, tmp_path, subprocess_env
@@ -455,6 +476,7 @@ class TestSnapshotPipeline:
         fixture_watchlist_path: Path,
         subprocess_env: dict,
     ):
+        """Watchlist marks matching row."""
         latest = self._stage(tmp_path, fixture_dated_csvs)
         (tmp_path / "acme-bolt-watchlist.json").write_bytes(
             fixture_watchlist_path.read_bytes()
@@ -483,6 +505,7 @@ class TestSnapshotPipeline:
         fixture_capture_manifest_path: Path,
         subprocess_env: dict,
     ):
+        """Capture manifest amber badge."""
         latest = self._stage(tmp_path, fixture_dated_csvs)
         (tmp_path / "acme-bolt-capture-2026-04-10.json").write_bytes(
             fixture_capture_manifest_path.read_bytes()
