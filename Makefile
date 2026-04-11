@@ -15,19 +15,19 @@ test-e2e:
 # Run the full suite with in-process and subprocess coverage. pytest-cov
 # combines the parallel datafiles automatically. Requires pytest-cov.
 coverage:
-	rm -f .coverage .coverage.*
+	rm -rf .coverage_cache
 	python3 -m pytest --cov=car-hunter/scripts --cov-report=term-missing
 
 coverage-html:
-	rm -f .coverage .coverage.*
+	rm -rf .coverage_cache
 	python3 -m pytest --cov=car-hunter/scripts --cov-report=term-missing --cov-report=html
 	@echo "HTML report: htmlcov/index.html"
 
 coverage-xml:
-	rm -f .coverage .coverage.*
+	rm -rf .coverage_cache
 	python3 -m pytest --cov=car-hunter/scripts --cov-report=term-missing --cov-report=xml
 	@echo "XML report: coverage.xml"
 
 clean:
-	rm -rf .pytest_cache htmlcov .coverage .coverage.*
+	rm -rf .pytest_cache htmlcov .coverage_cache .coverage .coverage.*
 	find . -type d -name __pycache__ -prune -exec rm -rf {} +

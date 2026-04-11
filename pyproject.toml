@@ -31,7 +31,10 @@ markers = [
 [tool.coverage.run]
 source = ["car-hunter/scripts"]
 # parallel + sigterm enable subprocess coverage: each spawned interpreter
-# writes its own .coverage.* datafile that `coverage combine` merges.
+# writes its own data file that `coverage combine` merges. data_file keeps
+# those parallel files inside .coverage_cache/ so killed runs don't litter
+# the repo root with .coverage.* leftovers.
+data_file = ".coverage_cache/.coverage"
 parallel = true
 sigterm = true
 omit = [
