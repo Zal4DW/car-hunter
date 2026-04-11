@@ -13,7 +13,10 @@ out of here.
 
 import hashlib
 import json
+import re
 from datetime import date, timedelta
+
+_AUTOTRADER_ID_RE = re.compile(r"^\d{10,20}$")
 
 
 def parse_listing_date(listing_id):
@@ -149,7 +152,7 @@ def extract_listing_id(url, source=None):
         tail = url.split("/car-details/", 1)[1]
         tail = tail.split("?", 1)[0].split("#", 1)[0].strip("/")
         segment = tail.split("/", 1)[0]
-        if segment:
+        if segment and _AUTOTRADER_ID_RE.match(segment):
             return segment
     digest = hashlib.sha1(url.encode("utf-8")).hexdigest()[:12]
     label = source if source else "url"

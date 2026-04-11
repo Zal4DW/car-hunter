@@ -198,6 +198,17 @@ if os.path.isfile(_capture_path):
             f"got {type(CAPTURE_MANIFEST).__name__}"
         )
     _sources = CAPTURE_MANIFEST.get("sources", [])
+    if not isinstance(_sources, list):
+        raise SystemExit(
+            f"Capture manifest {_capture_path}: 'sources' must be a list, "
+            f"got {type(_sources).__name__}"
+        )
+    for _i, _s in enumerate(_sources):
+        if not isinstance(_s, dict):
+            raise SystemExit(
+                f"Capture manifest {_capture_path}: 'sources[{_i}]' must be an object, "
+                f"got {type(_s).__name__}"
+            )
     _statuses = [s.get("status", "unknown") for s in _sources]
     if any(s == "failed" for s in _statuses):
         CAPTURE_BADGE = {"status": "failed", "colour": "red", "label": "Capture: failed"}
@@ -1027,6 +1038,13 @@ function showToast(msg) {{
     setTimeout(() => toast.classList.remove('show'), 2400);
 }}
 
+document.addEventListener('click', function(ev) {{
+    const btn = ev.target.closest && ev.target.closest('.star-btn');
+    if (!btn) return;
+    const id = decodeURIComponent(btn.dataset.listingId || '');
+    toggleStar(id);
+}});
+
 function toggleStar(listingId) {{
     if (!listingId) return;
     const command = '/watch-car add ' + listingId + ' "note"';
@@ -1281,7 +1299,9 @@ function renderRow(r) {{
     const depYr = r.dep_pa !== null ? '&pound;' + r.dep_pa.toLocaleString('en-GB') : '<span style="color:#6b7280;">N/A</span>';
     const starCls = r.watched ? 'star-btn active' : 'star-btn';
     const starGlyph = r.watched ? '&#9733;' : '&#9734;';
-    const starBtn = `<button class="${{starCls}}" onclick="toggleStar('${{r.listing_id || ''}}')" title="${{r.watched ? 'Watched' : 'Star this listing'}}">${{starGlyph}}</button>`;
+    const starTitle = r.watched ? 'Watched' : 'Star this listing';
+    const starId = encodeURIComponent(r.listing_id || '');
+    const starBtn = `<button class="${{starCls}}" data-listing-id="${{starId}}" title="${{starTitle}}">${{starGlyph}}</button>`;
 
     return `<td data-watched="${{r.watched ? 'true' : 'false'}}">${{starBtn}}</td>
         <td>${{r.variant}}</td>

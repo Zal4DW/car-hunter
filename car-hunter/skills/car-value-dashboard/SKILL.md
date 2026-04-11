@@ -234,9 +234,8 @@ The builder script lives in the plugin at `${CLAUDE_PLUGIN_ROOT}/scripts/build_d
 1. Load the car profile from `${CLAUDE_PLUGIN_DATA}/profiles/{profile_name}.json`
 2. Check for existing CSV data in the `{profile_name}-searches/` folder in the user's workspace
 3. If data is stale (>2 days old) or user requests fresh data, run `car-search` skill first
-4. Update LISTING_IDS and PRICE_CHANGES dictionaries in the profile (or a sidecar JSON) if new search data collected
-5. Run `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/build_dashboard.py --profile "${CLAUDE_PLUGIN_DATA}/profiles/{profile_name}.json" --csv <latest.csv>` to regenerate the dashboard
-6. Present key findings to the user (R-squared, flattening point, top deals, spec premiums)
+4. Run `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/build_dashboard.py --profile "${CLAUDE_PLUGIN_DATA}/profiles/{profile_name}.json" --csv <latest.csv>` to regenerate the dashboard. The builder reads every dated CSV in the searches folder, diffs them by `listing_id`, and recomputes all volatility metrics automatically. No manual `LISTING_IDS` / `PRICE_CHANGES` bookkeeping is required.
+5. Present key findings to the user (R-squared, flattening point, top deals, spec premiums)
 
 ## Important Notes
 

@@ -46,7 +46,8 @@ class TestMalformed:
         p = tmp_path / "wl.json"
         p.write_text(content)
         if needle is None:
-            load_watchlist(str(p))
+            result = load_watchlist(str(p))
+            assert result == {"listings": {"123": {"note": 1}}}
         else:
             with pytest.raises(SystemExit) as exc:
                 load_watchlist(str(p))

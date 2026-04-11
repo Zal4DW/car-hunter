@@ -405,7 +405,8 @@ class TestSnapshotPipeline:
     def _stage(self, tmp_path: Path, fixture_dated_csvs) -> Path:
         for p in fixture_dated_csvs:
             (tmp_path / p.name).write_bytes(p.read_bytes())
-        return tmp_path / fixture_dated_csvs[-1].name
+        latest = max(fixture_dated_csvs, key=lambda p: p.name)
+        return tmp_path / latest.name
 
     def test_builder_loads_all_snapshots(
         self,
@@ -438,7 +439,7 @@ class TestSnapshotPipeline:
         assert result.returncode == 0
         html = output_html.read_text()
         match = re.search(r"const TIME_SERIES\s*=\s*", html)
-        assert match, "TIME_SERIES constant missing"
+        assert match, "TIME_SERIES constant missing from generated HTML"
         import json as _json
         value, _ = _json.JSONDecoder().raw_decode(html[match.end():])
         assert isinstance(value, list)
@@ -466,6 +467,7 @@ class TestSnapshotPipeline:
         html = output_html.read_text()
         # The ALL_DATA row for the watched listing_id should have watched: true
         match = re.search(r"const ALL_DATA\s*=\s*", html)
+        assert match, "ALL_DATA constant missing from generated HTML"
         import json as _json
         data, _ = _json.JSONDecoder().raw_decode(html[match.end():])
         watched = [r for r in data if r.get("listing_id") == "202601150000000"]

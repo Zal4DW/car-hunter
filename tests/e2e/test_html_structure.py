@@ -7,13 +7,13 @@ Two layers:
    that a vanilla HTML parser cannot tokenise, this fails loudly.
 
 2. BeautifulSoup CSS-selector assertions: check that every landmark the
-   dashboard depends on is actually present in the output - 5 named
-   `<canvas>` elements, 5 filter `<select>` elements, a Chart.js CDN
+   dashboard depends on is actually present in the output - 6 named
+   `<canvas>` elements, 6 filter `<select>` elements, a Chart.js CDN
    `<script>` tag, the profile's display name in the title and `<h1>`,
    the data table tbody container, etc.
 
 3. Embedded JSON blob validation: the builder pre-serialises listing data
-   into seven `const XXX = {...};` JavaScript declarations via `js_safe`
+   into eleven `const XXX = {...};` JavaScript declarations via `js_safe`
    (which is a thin wrapper over `json.dumps`). Each one should therefore
    be parseable as JSON. A regression in `js_safe` or a template string
    corruption would surface here instantly.
