@@ -211,10 +211,12 @@ def rolling_window(dated_snapshots, today, days=28):
 
     prior_ids = set()
     prior_median = 0
+    prior_exists = False
     for d in ordered_dates:
         if d < today - timedelta(days=days - 1):
             prior_ids = set(by_date[d]["ids"])
             prior_median = by_date[d].get("median_price", 0)
+            prior_exists = True
         else:
             break
 
@@ -224,12 +226,13 @@ def rolling_window(dated_snapshots, today, days=28):
         snap = by_date.get(day)
         if snap is not None:
             curr_ids = set(snap["ids"])
-            new_count = len(curr_ids - prior_ids) if prior_ids or series else 0
-            removed_count = len(prior_ids - curr_ids) if prior_ids else 0
+            new_count = len(curr_ids - prior_ids) if prior_exists else 0
+            removed_count = len(prior_ids - curr_ids) if prior_exists else 0
             active = len(curr_ids)
             median = snap.get("median_price", prior_median)
             prior_ids = curr_ids
             prior_median = median
+            prior_exists = True
         else:
             active = len(prior_ids)
             new_count = 0
@@ -245,40 +248,34 @@ def rolling_window(dated_snapshots, today, days=28):
     return series
 
 
-def load_watchlist(path):
-    """Load a watchlist JSON file and validate its shape.
+def validate_watchlist(data, source="watchlist"):
+    """Validate the shape of a parsed watchlist JSON object.
 
-    Returns ``{"listings": {}}`` when ``path`` is None or does not exist.
-    Raises ``SystemExit`` with a descriptive message when the file exists but
-    is malformed, mirroring the loud-validation pattern used for the listing
-    state sidecar in build_dashboard.py.
+    Pure (no I/O). Accepts the already-decoded JSON value, raises SystemExit
+    with a descriptive message on malformed input, and returns a normalised
+    ``{"listings": {...}}`` dict on success. ``source`` is included in error
+    messages so callers can pass the originating filename for context.
     """
-    import os
-
-    if not path or not os.path.isfile(path):
-        return {"listings": {}}
-    with open(path, "r") as f:
-        data = json.load(f)
     if not isinstance(data, dict):
         raise SystemExit(
-            f"Watchlist file {path} must contain a JSON object, "
+            f"Watchlist {source} must contain a JSON object, "
             f"got {type(data).__name__}"
         )
     listings = data.get("listings", {})
     if not isinstance(listings, dict):
         raise SystemExit(
-            f"Watchlist file {path}: 'listings' must be an object, "
+            f"Watchlist {source}: 'listings' must be an object, "
             f"got {type(listings).__name__}"
         )
     for k, v in listings.items():
         if not isinstance(k, str):
             raise SystemExit(
-                f"Watchlist file {path}: 'listings' keys must be strings, "
+                f"Watchlist {source}: 'listings' keys must be strings, "
                 f"got {k!r}"
             )
         if not isinstance(v, dict):
             raise SystemExit(
-                f"Watchlist file {path}: 'listings[{k}]' must be an object, "
+                f"Watchlist {source}: 'listings[{k}]' must be an object, "
                 f"got {type(v).__name__}"
             )
     return {"listings": listings}

@@ -37,7 +37,7 @@ from dashboard_lib import (  # noqa: E402
     extract_listing_id,
     snapshot_diff,
     rolling_window,
-    load_watchlist,
+    validate_watchlist,
 )
 import glob as _glob
 import re as _re
@@ -221,7 +221,16 @@ if os.path.isfile(_capture_path):
 
 # ── Watchlist ───────────────────────────────────────────────────────
 _watchlist_path = os.path.join(_csv_dir, f"{PROFILE_NAME}-watchlist.json")
-WATCHLIST = load_watchlist(_watchlist_path)
+WATCHLIST = {"listings": {}}
+if os.path.isfile(_watchlist_path):
+    try:
+        with open(_watchlist_path, "r") as _wf:
+            _wl_data = json.load(_wf)
+    except json.JSONDecodeError as _exc:
+        raise SystemExit(
+            f"Watchlist file {_watchlist_path} is not valid JSON: {_exc}"
+        )
+    WATCHLIST = validate_watchlist(_wl_data, source=_watchlist_path)
 if WATCHLIST["listings"]:
     print(f"Loaded watchlist: {len(WATCHLIST['listings'])} starred listings")
 
