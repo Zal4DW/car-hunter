@@ -267,12 +267,9 @@ def validate_watchlist(data, source="watchlist"):
             f"Watchlist {source}: 'listings' must be an object, "
             f"got {type(listings).__name__}"
         )
+    # JSON object keys are always strings after json.load, so we only
+    # need to validate the value shape here.
     for k, v in listings.items():
-        if not isinstance(k, str):
-            raise SystemExit(
-                f"Watchlist {source}: 'listings' keys must be strings, "
-                f"got {k!r}"
-            )
         if not isinstance(v, dict):
             raise SystemExit(
                 f"Watchlist {source}: 'listings[{k}]' must be an object, "

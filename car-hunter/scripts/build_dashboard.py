@@ -229,7 +229,7 @@ if os.path.isfile(_watchlist_path):
     except json.JSONDecodeError as _exc:
         raise SystemExit(
             f"Watchlist file {_watchlist_path} is not valid JSON: {_exc}"
-        )
+        ) from _exc
     WATCHLIST = validate_watchlist(_wl_data, source=_watchlist_path)
 if WATCHLIST["listings"]:
     print(f"Loaded watchlist: {len(WATCHLIST['listings'])} starred listings")
@@ -1368,7 +1368,6 @@ function sortTable(col) {{
 function updateAll() {{
     updateKPIs();
     updateMarketPulse();
-    updateTimeSeriesChart();
     updateDepCurveChart();
     updateDealScoreChart();
     updateSpecPremiumChart();
@@ -1377,6 +1376,8 @@ function updateAll() {{
     updateTable();
 }}
 
+// TIME_SERIES is filter-independent so render it once at load.
+updateTimeSeriesChart();
 updateAll();
 </script>
 </body>
