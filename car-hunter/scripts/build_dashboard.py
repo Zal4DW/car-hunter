@@ -167,9 +167,12 @@ for _snap_path in sorted(_glob.glob(_snap_pattern)):
     except ValueError:
         continue
     with open(_snap_path, "r") as _sf:
-        _snap_rows = list(csv.DictReader(_sf))
-    if not _snap_rows or "listing_id" not in _snap_rows[0]:
-        continue
+        _reader = csv.DictReader(_sf)
+        if _reader.fieldnames is None or "listing_id" not in _reader.fieldnames:
+            # Snapshot file has no listing_id column at all - cannot diff it.
+            continue
+        _snap_rows = list(_reader)
+    # A header-only file is still a valid empty snapshot (all listings sold).
     _ids = {r.get("listing_id", "") for r in _snap_rows if r.get("listing_id")}
     _prices = sorted(int(r.get("price", 0) or 0) for r in _snap_rows if r.get("price"))
     _median = _prices[len(_prices) // 2] if _prices else 0
@@ -190,8 +193,13 @@ CAPTURE_MANIFEST = None
 CAPTURE_BADGE = {"status": "unknown", "colour": "grey", "label": "No capture manifest"}
 _capture_path = os.path.join(_csv_dir, f"{PROFILE_NAME}-capture-{today.isoformat()}.json")
 if os.path.isfile(_capture_path):
-    with open(_capture_path, "r") as _cf:
-        CAPTURE_MANIFEST = json.load(_cf)
+    try:
+        with open(_capture_path, "r") as _cf:
+            CAPTURE_MANIFEST = json.load(_cf)
+    except json.JSONDecodeError as _exc:
+        raise SystemExit(
+            f"Capture manifest {_capture_path} is not valid JSON: {_exc}"
+        ) from _exc
     if not isinstance(CAPTURE_MANIFEST, dict):
         raise SystemExit(
             f"Capture manifest {_capture_path} must contain a JSON object, "
