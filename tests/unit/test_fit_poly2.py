@@ -6,11 +6,14 @@ from dashboard_lib import fit_poly2
 
 
 def _points(pairs):
+    """Points."""
     return [{"age_months": am, "price": p} for am, p in pairs]
 
 
 class TestPoly2Fit:
+    """Poly2 fit test cases."""
     def test_recovers_quadratic_coefficients(self):
+        """Recovers quadratic coefficients."""
         # price = 50000 - 500 * months + 5 * months^2
         pairs = [(m, 50000 - 500 * m + 5 * m * m) for m in range(6, 61, 6)]
         a, b, c = fit_poly2(_points(pairs))
@@ -19,11 +22,13 @@ class TestPoly2Fit:
         assert c == pytest.approx(5, abs=1e-4)
 
     def test_linear_data_yields_near_zero_quadratic_term(self):
+        """Linear data yields near zero quadratic term."""
         pairs = [(m, 40000 - 300 * m) for m in range(6, 61, 6)]
         _, _, c = fit_poly2(_points(pairs))
         assert abs(c) < 1e-6
 
     def test_monotonically_decreasing_price_gives_negative_slope(self):
+        """Monotonically decreasing price gives negative slope."""
         pairs = [
             (6, 45000),
             (12, 42000),

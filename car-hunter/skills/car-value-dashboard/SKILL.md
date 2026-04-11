@@ -52,9 +52,11 @@ ${CLAUDE_PLUGIN_DATA}/profiles/{profile_name}.json
 {profile_name}-searches/{profile_name}-all-listings-{YYYY-MM-DD}.csv
 ```
 
-### Listing IDs and price changes
+### Snapshot archive and listing ids
 
-These are maintained as dictionaries in the Python builder, keyed by composite key `{price}_{location}`. These are manually updated each search session. The builder script should include placeholder dictionaries that the user populates.
+Price changes, days-on-market, and "new vs removed" counts are now derived automatically from the archive of dated CSVs in the searches folder. The builder globs `{profile_name}-all-listings-*.csv`, diffs the latest snapshot against the most recent prior one by `listing_id`, and builds a 28-day rolling time series for Market Pulse. No manual bookkeeping is needed.
+
+The legacy `{profile_name}-listing-state.json` sidecar (composite-key lookup) is still supported as a fallback for CSVs that predate the `listing_id` column, but it is deprecated. New search runs should populate `listing_id` per row (see the `car-search` skill) and skip the sidecar.
 
 ### Listing ID date encoding
 
@@ -93,34 +95,57 @@ For each spec option in `profile.spec_options`, compare mean regression residual
 
 Requires at least 3 cars with and 3 without the spec for a valid comparison.
 
-## Dashboard Charts (5 total)
+## Watchlist
+
+The dashboard reads `{profile_name}-searches/{profile_name}-watchlist.json` (if present) and renders a star column in the data table. Entries in the watchlist are matched by `listing_id`; starred rows keep their star across rebuilds and are exposed via the "Watched only" filter.
+
+Users manage the watchlist with the `/watch-car` slash command (`/watch-car add <id> "note"`, `/watch-car list`, `/watch-car remove <id>`). Clicking a star in the rendered dashboard copies the corresponding add-command to the clipboard so the user can paste it back into Claude.
+
+## Capture Coverage Badge
+
+If `{profile_name}-searches/{profile_name}-capture-{YYYY-MM-DD}.json` exists for today's date, the builder derives a single green / amber / red badge displayed next to the dashboard title:
+
+- **green** - every source reported `status: "ok"`
+- **amber** - at least one source reported `status: "partial"`
+- **red** - any source reported `status: "failed"`
+
+Missing manifest renders a grey "No capture manifest" badge. See the `car-search` skill for the manifest shape.
+
+## Dashboard Charts (6 total)
 
 All chart configurations read variant names, colours, and labels from the profile.
 
-### 1. Depreciation Curve (FULL WIDTH, TOP)
+### 1. Market Activity - Rolling 28-Day Window (FULL WIDTH, TOP)
+- **Type:** Combined line + bar chart
+- **X-axis:** Day-by-day for the last 28 days
+- **Left Y:** Active listing count (line)
+- **Right Y:** New arrivals (positive bars) and removed listings (negative bars)
+- **Source:** computed by the builder from globbed dated CSVs
+
+### 2. Depreciation Curve (FULL WIDTH)
 - **Type:** Scatter + fitted polynomial (degree 2) trend line per variant
 - **X-axis:** Age in months
 - **Y-axis:** Asking price
 - **Colours:** From `profile.variants[].colour`
 - **Annotation:** Auto-detects where the curve flattens (rate of loss halves)
 
-### 2. Deal Score -- Value vs Expected (FULL WIDTH)
+### 3. Deal Score -- Value vs Expected (FULL WIDTH)
 - **Type:** Horizontal bar (lollipop style)
 - **Data:** Each listing's deviation from predicted price
 - **Colour:** Green = undervalued, red = overpriced
 - **Labels:** Location, variant, age, mileage
 - **Dynamic height:** Canvas height adjusts to data count
 
-### 3. Spec Premium Analysis (HALF WIDTH)
+### 4. Spec Premium Analysis (HALF WIDTH)
 - **Type:** Horizontal bar
 - **Data:** Average price premium per option (labels from `profile.spec_options[].label`)
 
-### 4. Negotiation Radar (HALF WIDTH)
+### 5. Negotiation Radar (HALF WIDTH)
 - **Type:** Scatter (quadrant chart)
 - **X-axis:** Days listed
 - **Y-axis:** % above/below expected price
 
-### 5. Price vs Mileage (FULL WIDTH)
+### 6. Price vs Mileage (FULL WIDTH)
 - **Type:** Scatter + regression trendline
 - **Coloured by variant** using `profile.variants[].colour`
 
@@ -130,6 +155,7 @@ Sortable table of all used listings. Fixed columns:
 
 | Column | Data |
 |--------|------|
+| Star | click to copy a `/watch-car add <id>` command to the clipboard |
 | Variant | variant name |
 | Age | age_years (1dp) |
 | Price | asking price |
@@ -153,20 +179,27 @@ All charts, KPIs, Market Pulse, and the table respond to filters:
 - **Max Mileage**: "Any" + options from `profile.dashboard.mileage_filter_options`
 - **Budget**: "Any" + options from `profile.dashboard.budget_filter_options`
 - **Value**: All / Undervalued only / Overpriced only
+- **Watchlist**: All / Watched only
 
 Default selections use `profile.dashboard.mileage_filter_default` and `profile.dashboard.budget_filter_default`.
 
 ## Market Pulse Panel
 
-Shows rolling market health metrics:
-- Active listings (filtered count)
-- Sold/removed since last search
-- New arrivals since last search
-- Price reductions count and average drop
-- Average days on market
-- Median asking price
+Two-row grid:
 
-Note: sold/removed and new arrivals are currently hardcoded from manual comparison between search snapshots. Future versions could automate this by diffing CSV archives.
+**Since last run** (vs the most recent prior snapshot in the searches folder):
+- New arrivals count
+- Removed / sold count
+- Price drops count and average drop
+- Median asking price (filtered)
+
+**Rolling 28-day window** (computed from every dated CSV in the archive):
+- Average active listings per day
+- Total new arrivals (28d)
+- Total removed listings (28d)
+- Latest median price
+
+Both rows are populated automatically by the builder from the dated CSV archive and the snapshot diff helper in `dashboard_lib.py`. No manual bookkeeping is required.
 
 ## New Price Reference
 
@@ -201,15 +234,14 @@ The builder script lives in the plugin at `${CLAUDE_PLUGIN_ROOT}/scripts/build_d
 1. Load the car profile from `${CLAUDE_PLUGIN_DATA}/profiles/{profile_name}.json`
 2. Check for existing CSV data in the `{profile_name}-searches/` folder in the user's workspace
 3. If data is stale (>2 days old) or user requests fresh data, run `car-search` skill first
-4. Update LISTING_IDS and PRICE_CHANGES dictionaries in the profile (or a sidecar JSON) if new search data collected
-5. Run `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/build_dashboard.py --profile "${CLAUDE_PLUGIN_DATA}/profiles/{profile_name}.json" --csv <latest.csv>` to regenerate the dashboard
-6. Present key findings to the user (R-squared, flattening point, top deals, spec premiums)
+4. Run `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/build_dashboard.py --profile "${CLAUDE_PLUGIN_DATA}/profiles/{profile_name}.json" --csv <latest.csv>` to regenerate the dashboard. The builder reads every dated CSV in the searches folder, diffs them by `listing_id`, and recomputes all volatility metrics automatically. No manual `LISTING_IDS` / `PRICE_CHANGES` bookkeeping is required.
+5. Present key findings to the user (R-squared, flattening point, top deals, spec premiums)
 
 ## Important Notes
 
 - Exclude brand new unregistered stock from regression and table (but include in CSV tagged as `is_brand_new_stock`)
 - Check `variant.standard_specs` when interpreting spec data
 - Use UK English throughout (organisation, colour, analyse, etc.)
-- Composite keys (`price_location`) MUST be used for LISTING_IDS and PRICE_CHANGES to avoid duplicate location collisions
+- Snapshot diffing is keyed on the stable `listing_id` column. The legacy composite-key sidecar is a deprecated fallback only.
 - Dep/yr shows N/A for cars under 6 months old to avoid absurd annualised figures
 - The dashboard title comes from `profile.dashboard.title`

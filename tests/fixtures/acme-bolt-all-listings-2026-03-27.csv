@@ -1,0 +1,18 @@
+listing_id,variant,generation,price,year,reg,reg_date,age_years,mileage,new_price,depreciation_total,depreciation_pa,has_sunroof,has_premium_audio,has_heated_seats,options_count,location,is_brand_new_stock
+202601150000000,Bolt Base,mk1,42500,2025,75,2025.75,0.5,5000,45000,2500,5000,False,False,False,0,Testville,False
+202601200000001,Bolt Base,mk1,40000,2025,25,2025.25,1.0,9000,45000,5000,5000,True,False,False,1,Fakeborough,False
+202601250000002,Bolt Base,mk1,38000,2024,74,2024.75,1.5,14000,45000,8000,5333,False,False,True,1,Mockchester,False
+202601300000003,Bolt Base,mk1,36000,2024,24,2024.25,2.0,20000,45000,9000,4500,False,True,False,1,Testville,False
+202602040000004,Bolt Base,mk1,33500,2023,73,2023.75,2.5,25000,45000,11500,4600,True,False,True,2,Sampleton,False
+202602140000006,Bolt Base,mk1,27500,2022,22,2022.25,4.0,42000,45000,17500,4375,False,True,True,2,Mockchester,False
+202602190000007,Bolt Base,mk1,23000,2021,21,2021.25,5.0,55000,45000,22000,4400,True,False,False,1,Testville,False
+202602240000008,Bolt Sport,mk1,55000,2025,75,2025.75,0.5,4000,58000,3000,6000,False,True,True,2,Sampleton,False
+202603010000009,Bolt Sport,mk1,53000,2025,25,2025.25,1.0,8500,58000,5000,5000,True,True,True,3,Fakeborough,False
+202603060000010,Bolt Sport,mk1,49000,2024,74,2024.75,1.5,13000,58000,9000,6000,False,False,True,1,Testville,False
+202603110000011,Bolt Sport,mk1,46000,2024,24,2024.25,2.0,19000,58000,12000,6000,True,False,True,2,Mockchester,False
+202603160000012,Bolt Sport,mk1,44000,2023,73,2023.75,2.5,24000,58000,14000,5600,False,True,True,2,Sampleton,False
+202603210000013,Bolt Sport,mk1,41000,2023,23,2023.25,3.0,32000,58000,17000,5667,True,True,True,3,Fakeborough,False
+202603260000014,Bolt Sport,mk1,37500,2022,72,2022.75,3.5,38000,58000,20500,5857,False,False,True,1,Testville,False
+202603310000015,Bolt Sport,mk1,35000,2022,22,2022.25,4.0,44000,58000,23000,5750,True,False,True,2,Mockchester,False
+202604050000016,Bolt Sport,mk1,32000,2021,71,2021.75,4.5,50000,58000,26000,5778,False,True,True,2,Sampleton,False
+202604090000018,Bolt Sport,mk1,57000,2025,25,2025.75,0.1,100,58000,1000,0,True,True,True,3,Testville,True

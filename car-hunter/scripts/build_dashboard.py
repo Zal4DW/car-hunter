@@ -34,7 +34,13 @@ from dashboard_lib import (  # noqa: E402
     get_tier_value as _get_tier_value,
     retained_pct as _retained_pct,
     build_feature_matrix,
+    extract_listing_id,
+    snapshot_diff,
+    rolling_window,
+    validate_watchlist,
 )
+import glob as _glob
+import re as _re
 
 # ── Argument parsing ────────────────────────────────────────────────
 
@@ -109,6 +115,7 @@ with open(args.csv, "r") as f:
     reader = csv.DictReader(f)
     for r in reader:
         row = {
+            "listing_id": r.get("listing_id", "") or "",
             "variant": r["variant"],
             "generation": r.get("generation", ""),
             "price": int(r["price"]),
@@ -139,6 +146,102 @@ with open(args.csv, "r") as f:
 
 print(f"Loaded {len(rows)} listings")
 
+_csv_dir = os.path.dirname(os.path.abspath(args.csv))
+_has_listing_ids = any(r["listing_id"] for r in rows)
+
+# ── Glob dated snapshot CSVs for cross-run analysis ─────────────────
+# Scans the CSV directory for sibling snapshot files named
+# {profile_name}-all-listings-YYYY-MM-DD.csv. Any file missing a
+# `listing_id` column is skipped because it cannot be cross-referenced.
+
+SNAPSHOTS = []  # list of {date, rows, ids (set), median_price}
+_snap_pattern = os.path.join(_csv_dir, f"{PROFILE_NAME}-all-listings-*.csv")
+_date_re = _re.compile(r"-(\d{4}-\d{2}-\d{2})\.csv$")
+for _snap_path in sorted(_glob.glob(_snap_pattern)):
+    _m = _date_re.search(_snap_path)
+    if not _m:
+        continue
+    try:
+        _ys, _ms, _ds = _m.group(1).split("-")
+        _snap_date = date(int(_ys), int(_ms), int(_ds))
+    except ValueError:
+        continue
+    with open(_snap_path, "r") as _sf:
+        _reader = csv.DictReader(_sf)
+        if _reader.fieldnames is None or "listing_id" not in _reader.fieldnames:
+            # Snapshot file has no listing_id column at all - cannot diff it.
+            continue
+        _snap_rows = list(_reader)
+    # A header-only file is still a valid empty snapshot (all listings sold).
+    _ids = {r.get("listing_id", "") for r in _snap_rows if r.get("listing_id")}
+    _prices = sorted(int(r.get("price", 0) or 0) for r in _snap_rows if r.get("price"))
+    _median = _prices[len(_prices) // 2] if _prices else 0
+    SNAPSHOTS.append({
+        "date": _snap_date,
+        "path": _snap_path,
+        "rows": _snap_rows,
+        "ids": _ids,
+        "median_price": _median,
+    })
+print(f"Loaded {len(SNAPSHOTS)} snapshots")
+
+# ── Capture manifest (optional) ─────────────────────────────────────
+# Records what the search skill actually scraped, so "removed" listings
+# are not confused with coverage gaps.
+
+CAPTURE_MANIFEST = None
+CAPTURE_BADGE = {"status": "unknown", "colour": "grey", "label": "No capture manifest"}
+_capture_path = os.path.join(_csv_dir, f"{PROFILE_NAME}-capture-{today.isoformat()}.json")
+if os.path.isfile(_capture_path):
+    try:
+        with open(_capture_path, "r") as _cf:
+            CAPTURE_MANIFEST = json.load(_cf)
+    except json.JSONDecodeError as _exc:
+        raise SystemExit(
+            f"Capture manifest {_capture_path} is not valid JSON: {_exc}"
+        ) from _exc
+    if not isinstance(CAPTURE_MANIFEST, dict):
+        raise SystemExit(
+            f"Capture manifest {_capture_path} must contain a JSON object, "
+            f"got {type(CAPTURE_MANIFEST).__name__}"
+        )
+    _sources = CAPTURE_MANIFEST.get("sources", [])
+    if not isinstance(_sources, list):
+        raise SystemExit(
+            f"Capture manifest {_capture_path}: 'sources' must be a list, "
+            f"got {type(_sources).__name__}"
+        )
+    for _i, _s in enumerate(_sources):
+        if not isinstance(_s, dict):
+            raise SystemExit(
+                f"Capture manifest {_capture_path}: 'sources[{_i}]' must be an object, "
+                f"got {type(_s).__name__}"
+            )
+    _statuses = [s.get("status", "unknown") for s in _sources]
+    if any(s == "failed" for s in _statuses):
+        CAPTURE_BADGE = {"status": "failed", "colour": "red", "label": "Capture: failed"}
+    elif any(s == "partial" for s in _statuses):
+        CAPTURE_BADGE = {"status": "partial", "colour": "amber", "label": "Capture: partial"}
+    elif _statuses and all(s == "ok" for s in _statuses):
+        CAPTURE_BADGE = {"status": "ok", "colour": "green", "label": "Capture: complete"}
+    CAPTURE_BADGE["sources"] = _sources
+    print(f"Capture manifest: {CAPTURE_BADGE['label']} ({len(_sources)} sources)")
+
+# ── Watchlist ───────────────────────────────────────────────────────
+_watchlist_path = os.path.join(_csv_dir, f"{PROFILE_NAME}-watchlist.json")
+WATCHLIST = {"listings": {}}
+if os.path.isfile(_watchlist_path):
+    try:
+        with open(_watchlist_path, "r") as _wf:
+            _wl_data = json.load(_wf)
+    except json.JSONDecodeError as _exc:
+        raise SystemExit(
+            f"Watchlist file {_watchlist_path} is not valid JSON: {_exc}"
+        ) from _exc
+    WATCHLIST = validate_watchlist(_wl_data, source=_watchlist_path)
+if WATCHLIST["listings"]:
+    print(f"Loaded watchlist: {len(WATCHLIST['listings'])} starred listings")
+
 # ── Listing IDs and price changes ───────────────────────────────────
 # Loaded from an optional sidecar JSON keyed by composite key {price}_{location}.
 # The sidecar is resolved in this order:
@@ -157,8 +260,9 @@ PRICE_CHANGES = {}
 _state_path = None
 if args.listing_state:
     _state_path = args.listing_state
-else:
-    _csv_dir = os.path.dirname(os.path.abspath(args.csv))
+elif not _has_listing_ids:
+    # Only auto-detect the legacy sidecar when the CSV lacks the listing_id
+    # column. Snapshot-driven diffing supersedes it when ids are present.
     _auto = os.path.join(_csv_dir, f"{PROFILE_NAME}-listing-state.json")
     if os.path.isfile(_auto):
         _state_path = _auto
@@ -209,22 +313,88 @@ if _state_path:
         f"{len(LISTING_IDS)} listing IDs, {len(PRICE_CHANGES)} price changes"
     )
 
-# ── Composite keys and listing tracking ─────────────────────────────
+# ── Composite keys, snapshot diffing, listing tracking ─────────────
+# Two mutually exclusive paths:
+#   (a) CSV has `listing_id` column -> snapshot-driven diff across the
+#       dated CSV archive for price changes, days-on-market, and the
+#       new vs removed counts consumed by Market Pulse.
+#   (b) CSV is legacy (no listing_id) -> fall back to the sidecar
+#       composite-key lookup preserved above.
+
+SNAPSHOT_PULSE = {"new": 0, "removed": 0, "price_drops": 0, "previous_date": None}
 
 for row in rows:
-    key = f"{row['price']}_{row['location']}"
-    row["composite_key"] = key
+    row["composite_key"] = f"{row['price']}_{row['location']}"
+    row["autotrader_url"] = None
+    row["days_on_market"] = None
+    row["price_change"] = 0
+    row["watched"] = False
+    row["watch_note"] = ""
 
-    lid = LISTING_IDS.get(key)
-    if lid and LID_ENCODING.get("enabled"):
-        row["autotrader_url"] = f"https://www.autotrader.co.uk/car-details/{lid}"
-        ld = parse_listing_date(lid)
-        row["days_on_market"] = (today - ld).days if ld else None
-    else:
-        row["autotrader_url"] = None
-        row["days_on_market"] = None
+if _has_listing_ids:
+    rows_by_id = {r["listing_id"]: r for r in rows if r["listing_id"]}
 
-    row["price_change"] = PRICE_CHANGES.get(key, 0)
+    # AutoTrader URL + days-on-market from the id itself when encoded.
+    for row in rows:
+        lid = row["listing_id"]
+        if not lid:
+            continue
+        if LID_ENCODING.get("enabled") and lid.isdigit():
+            row["autotrader_url"] = f"https://www.autotrader.co.uk/car-details/{lid}"
+            ld = parse_listing_date(lid)
+            if ld:
+                row["days_on_market"] = (today - ld).days
+
+    # Snapshot diff: today vs the most recent prior snapshot.
+    _today_snap = next((s for s in SNAPSHOTS if s["date"] == today), None)
+    _prior = [s for s in SNAPSHOTS if s["date"] < today]
+    if _today_snap and _prior:
+        _prev = _prior[-1]
+        _diff = snapshot_diff(
+            [{"listing_id": r.get("listing_id", ""), "price": int(r.get("price", 0) or 0)} for r in _prev["rows"]],
+            [{"listing_id": r.get("listing_id", ""), "price": int(r.get("price", 0) or 0)} for r in _today_snap["rows"]],
+        )
+        for ch in _diff["price_changed"]:
+            r = rows_by_id.get(ch["id"])
+            if r is not None:
+                r["price_change"] = ch["delta"]
+        SNAPSHOT_PULSE = {
+            "new": len(_diff["new"]),
+            "removed": len(_diff["removed"]),
+            "price_drops": sum(1 for c in _diff["price_changed"] if c["delta"] < 0),
+            "previous_date": _prev["date"].isoformat(),
+        }
+        print(
+            f"Snapshot diff vs {_prev['date'].isoformat()}: "
+            f"+{SNAPSHOT_PULSE['new']} new, -{SNAPSHOT_PULSE['removed']} removed, "
+            f"{SNAPSHOT_PULSE['price_drops']} price drops"
+        )
+
+    # Apply watchlist stars.
+    _wl = WATCHLIST["listings"]
+    for row in rows:
+        if row["listing_id"] in _wl:
+            row["watched"] = True
+            row["watch_note"] = _wl[row["listing_id"]].get("note", "") if isinstance(_wl[row["listing_id"]], dict) else ""
+else:
+    # Legacy sidecar path: apply composite-key lookups.
+    for row in rows:
+        key = row["composite_key"]
+        lid = LISTING_IDS.get(key)
+        if lid and LID_ENCODING.get("enabled"):
+            row["autotrader_url"] = f"https://www.autotrader.co.uk/car-details/{lid}"
+            ld = parse_listing_date(lid)
+            row["days_on_market"] = (today - ld).days if ld else None
+        row["price_change"] = PRICE_CHANGES.get(key, 0)
+
+# ── Rolling 28-day time series ──────────────────────────────────────
+TIME_SERIES = []
+if SNAPSHOTS:
+    TIME_SERIES = rolling_window(
+        [{"date": s["date"], "ids": s["ids"], "median_price": s["median_price"]} for s in SNAPSHOTS],
+        today,
+        days=28,
+    )
 
 # ── Spec labels and scores ──────────────────────────────────────────
 
@@ -400,6 +570,9 @@ for r in rows:
         "location": r["location"],
         "autotrader_url": r["autotrader_url"],
         "composite_key": r["composite_key"],
+        "listing_id": r["listing_id"],
+        "watched": r["watched"],
+        "watch_note": r["watch_note"],
     })
 
 # Lollipop chart data
@@ -558,6 +731,16 @@ a.listing-link:hover {{ text-decoration: underline; }}
 .spec-tag {{ display: inline-block; padding: 1px 6px; border-radius: 3px; font-size: 10px; margin-right: 3px; background: rgba(100,116,139,0.2); color: #94a3b8; }}
 .spec-tag.highlight {{ background: rgba(139,92,246,0.2); color: #a78bfa; }}
 .model-info {{ font-size: 11px; color: #6b7280; margin-top: 8px; padding: 8px; background: rgba(100,116,139,0.1); border-radius: 4px; }}
+.capture-badge {{ display: inline-block; margin-left: 12px; padding: 4px 10px; border-radius: 999px; font-size: 11px; font-weight: 600; vertical-align: middle; }}
+.capture-badge-green {{ background: rgba(34,197,94,0.15); color: #4ade80; border: 1px solid rgba(34,197,94,0.4); }}
+.capture-badge-amber {{ background: rgba(245,158,11,0.15); color: #fbbf24; border: 1px solid rgba(245,158,11,0.4); }}
+.capture-badge-red {{ background: rgba(239,68,68,0.15); color: #f87171; border: 1px solid rgba(239,68,68,0.4); }}
+.capture-badge-grey {{ background: rgba(100,116,139,0.15); color: #94a3b8; border: 1px solid rgba(100,116,139,0.4); }}
+.star-btn {{ background: none; border: none; cursor: pointer; font-size: 16px; padding: 0 4px; color: #6b7280; }}
+.star-btn.active {{ color: #fbbf24; }}
+.toast {{ position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); background: #1e293b; color: #fff; padding: 12px 20px; border-radius: 8px; border: 1px solid #334155; font-size: 13px; opacity: 0; transition: opacity 0.2s; pointer-events: none; z-index: 1000; }}
+.toast.show {{ opacity: 1; }}
+.pulse-row-label {{ font-size: 11px; color: {text_muted}; text-transform: uppercase; letter-spacing: 0.05em; margin: 12px 0 6px; }}
 @media (max-width: 900px) {{
     .chart-grid {{ grid-template-columns: 1fr; }}
     .kpi-row {{ grid-template-columns: repeat(2, 1fr); }}
@@ -569,7 +752,7 @@ a.listing-link:hover {{ text-decoration: underline; }}
 <body>
 
 <div class="header">
-    <h1>{DISPLAY_NAME} &mdash; Buyer Intelligence Dashboard</h1>
+    <h1>{DISPLAY_NAME} &mdash; Buyer Intelligence Dashboard<span id="captureBadge" class="capture-badge capture-badge-{CAPTURE_BADGE['colour']}">{CAPTURE_BADGE['label']}</span></h1>
     <p>{len(table_data)} used listings &bull; Data collected {today_str} &bull; Regression model R&sup2; = {r_squared:.3f}</p>
 </div>
 
@@ -620,14 +803,32 @@ a.listing-link:hover {{ text-decoration: underline; }}
                 <option value="over">Overpriced only</option>
             </select>
         </div>
+        <div class="filter-group">
+            <label>Watchlist</label>
+            <select id="filterWatch" onchange="updateAll()">
+                <option value="all">All</option>
+                <option value="watched">Watched only</option>
+            </select>
+        </div>
     </div>
 
     <div class="market-pulse">
         <h3>Market Pulse</h3>
+        <div class="pulse-row-label">Since last run <span id="pulseSinceDate" style="color:#6b7280;"></span></div>
         <div class="pulse-grid" id="pulseGrid"></div>
+        <div class="pulse-row-label">Rolling 28-day window</div>
+        <div class="pulse-grid" id="pulseRollingGrid"></div>
     </div>
 
     <div class="chart-grid">
+        <div class="chart-card full">
+            <h3>Market Activity &mdash; Rolling 28-Day Window</h3>
+            <p>Active listings, new arrivals, and removed listings per day over the last 28 days.</p>
+            <div class="chart-container">
+                <canvas id="timeSeriesChart"></canvas>
+            </div>
+        </div>
+
         <div class="chart-card full">
             <h3>Depreciation Curve &mdash; When Does It Flatten?</h3>
             <p>Asking price by age in months, with fitted polynomial trend per variant.</p>
@@ -676,17 +877,18 @@ a.listing-link:hover {{ text-decoration: underline; }}
         <table id="dataTable">
             <thead>
                 <tr>
-                    <th onclick="sortTable(0)">Variant</th>
-                    <th onclick="sortTable(1)">Age</th>
-                    <th onclick="sortTable(2)">Price</th>
-                    <th onclick="sortTable(3)">Expected</th>
-                    <th onclick="sortTable(4)">Value</th>
-                    <th onclick="sortTable(5)">Mileage</th>
-                    <th onclick="sortTable(6)">Dep/yr</th>
-                    <th onclick="sortTable(7)">Days</th>
-                    <th onclick="sortTable(8)">Trend</th>
-                    <th onclick="sortTable(9)">Spec</th>
-                    <th onclick="sortTable(10)">Location</th>
+                    <th>&#9733;</th>
+                    <th onclick="sortTable(1)">Variant</th>
+                    <th onclick="sortTable(2)">Age</th>
+                    <th onclick="sortTable(3)">Price</th>
+                    <th onclick="sortTable(4)">Expected</th>
+                    <th onclick="sortTable(5)">Value</th>
+                    <th onclick="sortTable(6)">Mileage</th>
+                    <th onclick="sortTable(7)">Dep/yr</th>
+                    <th onclick="sortTable(8)">Days</th>
+                    <th onclick="sortTable(9)">Trend</th>
+                    <th onclick="sortTable(10)">Spec</th>
+                    <th onclick="sortTable(11)">Location</th>
                 </tr>
             </thead>
             <tbody id="tableBody"></tbody>
@@ -702,6 +904,10 @@ const NEGOTIATION_DATA = {js_safe(negotiation_data)};
 const PM_TREND = {js_safe(pm_trend)};
 const VARIANT_COLOURS = {js_safe(VARIANT_COLOURS)};
 const HIGHLIGHT_SPECS = {js_safe(highlight_specs)};
+const WATCHLIST = {js_safe(WATCHLIST)};
+const TIME_SERIES = {js_safe(TIME_SERIES)};
+const PULSE_SINCE = {js_safe(SNAPSHOT_PULSE)};
+const CAPTURE = {js_safe(CAPTURE_BADGE)};
 
 let charts = {{}};
 
@@ -710,6 +916,8 @@ function getFilteredData() {{
     const mileage = parseInt(document.getElementById('filterMileage').value);
     const budget = parseInt(document.getElementById('filterBudget').value);
     const value = document.getElementById('filterValue').value;
+    const watchEl = document.getElementById('filterWatch');
+    const watch = watchEl ? watchEl.value : 'all';
 
     return ALL_DATA.filter(row => {{
         if (variant !== 'all' && row.variant !== variant) return false;
@@ -718,6 +926,7 @@ function getFilteredData() {{
         if (row.price > budget) return false;
         if (value === 'under' && row.deviation >= 0) return false;
         if (value === 'over' && row.deviation < 0) return false;
+        if (watch === 'watched' && !row.watched) return false;
         return true;
     }});
 }}
@@ -754,37 +963,116 @@ function updateKPIs() {{
     `;
 }}
 
+function buildPulseItem(label, value, sub) {{
+    const item = document.createElement('div');
+    item.className = 'pulse-item';
+    const l = document.createElement('div'); l.className = 'pulse-item-label'; l.textContent = label;
+    const v = document.createElement('div'); v.className = 'pulse-item-value'; v.textContent = value;
+    const s = document.createElement('div'); s.className = 'pulse-item-sub'; s.textContent = sub;
+    item.appendChild(l); item.appendChild(v); item.appendChild(s);
+    return item;
+}}
+
+function renderPulseGrid(el, items) {{
+    while (el.firstChild) el.removeChild(el.firstChild);
+    items.forEach(it => el.appendChild(buildPulseItem(it.label, it.value, it.sub)));
+}}
+
 function updateMarketPulse() {{
     const data = getFilteredData();
-    const withDays = data.filter(r => r.days_on_market !== null);
-    const avgDays = withDays.length > 0 ? Math.round(withDays.reduce((s, r) => s + r.days_on_market, 0) / withDays.length) : 'N/A';
     const priceDrops = data.filter(r => r.price_change < 0);
     const avgDrop = priceDrops.length > 0 ? Math.round(priceDrops.reduce((s, r) => s + Math.abs(r.price_change), 0) / priceDrops.length) : 0;
     const sorted = [...data].sort((a, b) => a.price - b.price);
     const median = sorted.length > 0 ? sorted[Math.floor(sorted.length / 2)].price : 0;
 
-    document.getElementById('pulseGrid').innerHTML = `
-        <div class="pulse-item">
-            <div class="pulse-item-label">Filtered Listings</div>
-            <div class="pulse-item-value">${{data.length}}</div>
-            <div class="pulse-item-sub">Matching filters</div>
-        </div>
-        <div class="pulse-item">
-            <div class="pulse-item-label">Price Reductions</div>
-            <div class="pulse-item-value">${{priceDrops.length}}</div>
-            <div class="pulse-item-sub">${{priceDrops.length > 0 ? 'Avg &darr;&pound;' + avgDrop.toLocaleString('en-GB') : 'None in filter'}}</div>
-        </div>
-        <div class="pulse-item">
-            <div class="pulse-item-label">Avg Days Listed</div>
-            <div class="pulse-item-value">${{avgDays}}</div>
-            <div class="pulse-item-sub">Tracked listings</div>
-        </div>
-        <div class="pulse-item">
-            <div class="pulse-item-label">Median Price</div>
-            <div class="pulse-item-value">&pound;${{median.toLocaleString('en-GB')}}</div>
-            <div class="pulse-item-sub">Filtered</div>
-        </div>
-    `;
+    const sinceDateEl = document.getElementById('pulseSinceDate');
+    if (sinceDateEl) sinceDateEl.textContent = PULSE_SINCE.previous_date ? '(vs ' + PULSE_SINCE.previous_date + ')' : '';
+
+    renderPulseGrid(document.getElementById('pulseGrid'), [
+        {{ label: 'New Arrivals', value: String(PULSE_SINCE.new || 0), sub: 'Since last run' }},
+        {{ label: 'Removed', value: String(PULSE_SINCE.removed || 0), sub: 'Sold or delisted' }},
+        {{ label: 'Price Drops', value: String(priceDrops.length), sub: priceDrops.length > 0 ? 'Avg \\u2193\\u00a3' + avgDrop.toLocaleString('en-GB') : 'None' }},
+        {{ label: 'Median Price', value: '\\u00a3' + median.toLocaleString('en-GB'), sub: 'Filtered' }}
+    ]);
+
+    const rollingGrid = document.getElementById('pulseRollingGrid');
+    if (rollingGrid && TIME_SERIES.length > 0) {{
+        const avgActive = Math.round(TIME_SERIES.reduce((s, d) => s + d.active, 0) / TIME_SERIES.length);
+        const totalNew = TIME_SERIES.reduce((s, d) => s + d.new, 0);
+        const totalRemoved = TIME_SERIES.reduce((s, d) => s + d.removed, 0);
+        const latestMedian = TIME_SERIES[TIME_SERIES.length - 1].median;
+        renderPulseGrid(rollingGrid, [
+            {{ label: 'Avg Active', value: String(avgActive), sub: 'Per day (28d)' }},
+            {{ label: 'New (28d)', value: String(totalNew), sub: 'Arrivals total' }},
+            {{ label: 'Removed (28d)', value: String(totalRemoved), sub: 'Total delisted' }},
+            {{ label: 'Median Trend', value: '\\u00a3' + latestMedian.toLocaleString('en-GB'), sub: 'Latest snapshot' }}
+        ]);
+    }} else if (rollingGrid) {{
+        renderPulseGrid(rollingGrid, [
+            {{ label: 'No snapshots', value: '-', sub: 'Needs dated CSV history' }}
+        ]);
+    }}
+}}
+
+function updateTimeSeriesChart() {{
+    const ctx = document.getElementById('timeSeriesChart');
+    if (!ctx) return;
+    if (charts.timeSeries) charts.timeSeries.destroy();
+    if (!TIME_SERIES || TIME_SERIES.length === 0) return;
+
+    const labels = TIME_SERIES.map(d => d.date);
+    charts.timeSeries = new Chart(ctx.getContext('2d'), {{
+        data: {{
+            labels: labels,
+            datasets: [
+                {{ type: 'line', label: 'Active', data: TIME_SERIES.map(d => d.active), borderColor: '#60a5fa', backgroundColor: 'rgba(59,130,246,0.1)', tension: 0.3, yAxisID: 'y' }},
+                {{ type: 'bar', label: 'New', data: TIME_SERIES.map(d => d.new), backgroundColor: 'rgba(34,197,94,0.5)', yAxisID: 'y1' }},
+                {{ type: 'bar', label: 'Removed', data: TIME_SERIES.map(d => -d.removed), backgroundColor: 'rgba(239,68,68,0.5)', yAxisID: 'y1' }}
+            ]
+        }},
+        options: {{
+            responsive: true, maintainAspectRatio: true, aspectRatio: 2.8,
+            plugins: {{ legend: {{ labels: {{ color: '{text_colour}' }} }} }},
+            scales: {{
+                x: {{ grid: {{ color: '{card_border}' }}, ticks: {{ color: '{text_muted}', maxRotation: 0, autoSkip: true }} }},
+                y: {{ position: 'left', title: {{ display: true, text: 'Active', color: '{text_muted}' }}, grid: {{ color: '{card_border}' }}, ticks: {{ color: '{text_muted}' }} }},
+                y1: {{ position: 'right', title: {{ display: true, text: 'New / Removed', color: '{text_muted}' }}, grid: {{ display: false }}, ticks: {{ color: '{text_muted}' }} }}
+            }}
+        }}
+    }});
+}}
+
+function showToast(msg) {{
+    let toast = document.getElementById('toast');
+    if (!toast) {{
+        toast = document.createElement('div');
+        toast.id = 'toast';
+        toast.className = 'toast';
+        document.body.appendChild(toast);
+    }}
+    toast.textContent = msg;
+    toast.classList.add('show');
+    setTimeout(() => toast.classList.remove('show'), 2400);
+}}
+
+document.addEventListener('click', function(ev) {{
+    const btn = ev.target.closest && ev.target.closest('.star-btn');
+    if (!btn) return;
+    const id = decodeURIComponent(btn.dataset.listingId || '');
+    toggleStar(id);
+}});
+
+function toggleStar(listingId) {{
+    if (!listingId) return;
+    const command = '/watch-car add ' + listingId + ' "note"';
+    if (navigator.clipboard && navigator.clipboard.writeText) {{
+        navigator.clipboard.writeText(command).then(
+            () => showToast('Copied: ' + command),
+            () => showToast('Copy failed - command: ' + command)
+        );
+    }} else {{
+        showToast('Run in Claude: ' + command);
+    }}
 }}
 
 function updateDepCurveChart() {{
@@ -1026,8 +1314,14 @@ function renderRow(r) {{
         ? `<a href="${{r.autotrader_url}}" target="_blank" class="listing-link">${{r.location}}</a>`
         : r.location;
     const depYr = r.dep_pa !== null ? '&pound;' + r.dep_pa.toLocaleString('en-GB') : '<span style="color:#6b7280;">N/A</span>';
+    const starCls = r.watched ? 'star-btn active' : 'star-btn';
+    const starGlyph = r.watched ? '&#9733;' : '&#9734;';
+    const starTitle = r.watched ? 'Watched' : 'Star this listing';
+    const starId = encodeURIComponent(r.listing_id || '');
+    const starBtn = `<button class="${{starCls}}" data-listing-id="${{starId}}" title="${{starTitle}}">${{starGlyph}}</button>`;
 
-    return `<td>${{r.variant}}</td>
+    return `<td data-watched="${{r.watched ? 'true' : 'false'}}">${{starBtn}}</td>
+        <td>${{r.variant}}</td>
         <td>${{r.age.toFixed(1)}}yr</td>
         <td>&pound;${{r.price.toLocaleString('en-GB')}}</td>
         <td>&pound;${{r.predicted.toLocaleString('en-GB')}}</td>
@@ -1053,7 +1347,7 @@ function updateTable() {{
 
 let sortCol = -1, sortAsc = true;
 function sortTable(col) {{
-    const cols = ['variant', 'age', 'price', 'predicted', 'deviation', 'mileage', 'dep_pa', 'days_on_market', 'price_change', 'spec_text', 'location'];
+    const cols = ['watched', 'variant', 'age', 'price', 'predicted', 'deviation', 'mileage', 'dep_pa', 'days_on_market', 'price_change', 'spec_text', 'location'];
     if (sortCol === col) sortAsc = !sortAsc;
     else {{ sortCol = col; sortAsc = true; }}
 
@@ -1090,6 +1384,8 @@ function updateAll() {{
     updateTable();
 }}
 
+// TIME_SERIES is filter-independent so render it once at load.
+updateTimeSeriesChart();
 updateAll();
 </script>
 </body>

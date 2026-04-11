@@ -7,13 +7,13 @@ Two layers:
    that a vanilla HTML parser cannot tokenise, this fails loudly.
 
 2. BeautifulSoup CSS-selector assertions: check that every landmark the
-   dashboard depends on is actually present in the output - 5 named
-   `<canvas>` elements, 5 filter `<select>` elements, a Chart.js CDN
+   dashboard depends on is actually present in the output - 6 named
+   `<canvas>` elements, 6 filter `<select>` elements, a Chart.js CDN
    `<script>` tag, the profile's display name in the title and `<h1>`,
    the data table tbody container, etc.
 
 3. Embedded JSON blob validation: the builder pre-serialises listing data
-   into seven `const XXX = {...};` JavaScript declarations via `js_safe`
+   into eleven `const XXX = {...};` JavaScript declarations via `js_safe`
    (which is a thin wrapper over `json.dumps`). Each one should therefore
    be parseable as JSON. A regression in `js_safe` or a template string
    corruption would surface here instantly.
@@ -76,6 +76,7 @@ def built_html(
 
 @pytest.fixture(scope="session")
 def soup(built_html: str) -> BeautifulSoup:
+    """Soup."""
     return BeautifulSoup(built_html, "html.parser")
 
 
@@ -90,6 +91,7 @@ class TestStdlibHtmlParse:
         document without raising. Catches truly broken output."""
 
         class NullParser(html.parser.HTMLParser):
+            """Nullparser test cases."""
             pass
 
         parser = NullParser()
@@ -97,13 +99,16 @@ class TestStdlibHtmlParse:
         parser.close()
 
     def test_has_html5_doctype(self, built_html: str):
+        """Has html5 doctype."""
         assert built_html.lstrip().lower().startswith("<!doctype html>")
 
     def test_has_opening_and_closing_html_tags(self, built_html: str):
+        """Has opening and closing html tags."""
         assert "<html" in built_html
         assert "</html>" in built_html.rstrip()
 
     def test_has_head_and_body_blocks(self, built_html: str):
+        """Has head and body blocks."""
         assert "<head>" in built_html and "</head>" in built_html
         assert "<body>" in built_html and "</body>" in built_html
 
@@ -132,21 +137,25 @@ class TestDocumentChrome:
     """High-level page structure and metadata."""
 
     def test_title_contains_display_name(self, soup: BeautifulSoup):
+        """Title contains display name."""
         title = soup.find("title")
         assert title is not None
         assert "Acme Bolt EV" in title.get_text()
 
     def test_h1_contains_display_name(self, soup: BeautifulSoup):
+        """H1 contains display name."""
         h1 = soup.find("h1")
         assert h1 is not None
         assert "Acme Bolt EV" in h1.get_text()
 
     def test_lang_attribute_set(self, soup: BeautifulSoup):
+        """Lang attribute set."""
         html_el = soup.find("html")
         assert html_el is not None
         assert html_el.get("lang") == "en"
 
     def test_viewport_meta_tag_present(self, soup: BeautifulSoup):
+        """Viewport meta tag present."""
         viewport = soup.find("meta", attrs={"name": "viewport"})
         assert viewport is not None, "missing viewport meta tag"
         assert "width=device-width" in (viewport.get("content") or "")
@@ -157,6 +166,7 @@ class TestChartJsIntegration:
 
     EXPECTED_CANVAS_IDS = frozenset(
         {
+            "timeSeriesChart",
             "depCurveChart",
             "dealScoreChart",
             "specPremiumChart",
@@ -166,6 +176,7 @@ class TestChartJsIntegration:
     )
 
     def test_chartjs_script_tag_present(self, soup: BeautifulSoup):
+        """Chartjs script tag present."""
         scripts = soup.find_all("script", src=True)
         chartjs = [s for s in scripts if "chart" in (s.get("src") or "").lower()]
         assert chartjs, "no Chart.js script tag found"
@@ -187,14 +198,16 @@ class TestChartJsIntegration:
             f"no remote Chart.js script tag found; srcs: {srcs}"
         )
 
-    def test_exactly_five_canvases_present(self, soup: BeautifulSoup):
+    def test_exactly_six_canvases_present(self, soup: BeautifulSoup):
+        """Exactly six canvases present."""
         canvases = soup.find_all("canvas")
-        assert len(canvases) == 5, (
-            f"expected exactly 5 canvases, found {len(canvases)}: "
+        assert len(canvases) == 6, (
+            f"expected exactly 6 canvases, found {len(canvases)}: "
             f"{[c.get('id') for c in canvases]}"
         )
 
     def test_all_canvas_ids_match_expected_set(self, soup: BeautifulSoup):
+        """All canvas ids match expected set."""
         canvases = soup.find_all("canvas")
         found_ids = {c.get("id") for c in canvases}
         assert found_ids == self.EXPECTED_CANVAS_IDS, (
@@ -204,7 +217,7 @@ class TestChartJsIntegration:
 
 
 class TestFilterControls:
-    """The dashboard exposes five filter dropdowns that cascade through
+    """The dashboard exposes six filter dropdowns that cascade through
     every chart, KPI card, and table row."""
 
     EXPECTED_SELECT_IDS = frozenset(
@@ -214,10 +227,12 @@ class TestFilterControls:
             "filterMileage",
             "filterBudget",
             "filterValue",
+            "filterWatch",
         }
     )
 
-    def test_all_five_filter_selects_present(self, soup: BeautifulSoup):
+    def test_all_six_filter_selects_present(self, soup: BeautifulSoup):
+        """All six filter selects present."""
         selects = soup.find_all("select")
         found_ids = {s.get("id") for s in selects}
         assert self.EXPECTED_SELECT_IDS.issubset(found_ids), (
@@ -226,6 +241,7 @@ class TestFilterControls:
         )
 
     def test_filter_selects_have_onchange_handlers(self, soup: BeautifulSoup):
+        """Filter selects have onchange handlers."""
         for select_id in self.EXPECTED_SELECT_IDS:
             sel = soup.find("select", id=select_id)
             assert sel is not None
@@ -236,12 +252,15 @@ class TestDataContainers:
     """KPI grid, market pulse panel, and sortable data table containers."""
 
     def test_kpi_row_container_present(self, soup: BeautifulSoup):
+        """Kpi row container present."""
         assert soup.find("div", id="kpiRow") is not None
 
     def test_pulse_grid_container_present(self, soup: BeautifulSoup):
+        """Pulse grid container present."""
         assert soup.find("div", id="pulseGrid") is not None
 
     def test_data_table_and_tbody_present(self, soup: BeautifulSoup):
+        """Data table and tbody present."""
         table = soup.find("table", id="dataTable")
         assert table is not None
         tbody = soup.find("tbody", id="tableBody")
@@ -264,6 +283,10 @@ class TestEmbeddedJsonBlocks:
         "PM_TREND",
         "VARIANT_COLOURS",
         "HIGHLIGHT_SPECS",
+        "WATCHLIST",
+        "TIME_SERIES",
+        "PULSE_SINCE",
+        "CAPTURE",
     )
 
     def _extract_blob(self, html_text: str, name: str) -> str:
@@ -286,6 +309,7 @@ class TestEmbeddedJsonBlocks:
         return html_text[start : start + consumed]
 
     def test_every_expected_constant_is_declared(self, built_html: str):
+        """Every expected constant is declared."""
         for name in self.EXPECTED_CONSTANTS:
             assert f"const {name}" in built_html, f"const {name} missing"
 
@@ -299,9 +323,14 @@ class TestEmbeddedJsonBlocks:
             "PM_TREND",
             "VARIANT_COLOURS",
             "HIGHLIGHT_SPECS",
+            "WATCHLIST",
+            "TIME_SERIES",
+            "PULSE_SINCE",
+            "CAPTURE",
         ],
     )
     def test_blob_parses_as_json(self, built_html: str, name: str):
+        """Blob parses as json."""
         blob = self._extract_blob(built_html, name)
         try:
             json.loads(blob)
@@ -309,6 +338,7 @@ class TestEmbeddedJsonBlocks:
             pytest.fail(f"{name} is not valid JSON: {exc}\n{blob[:200]}")
 
     def test_all_data_is_non_empty_list_of_rows(self, built_html: str):
+        """All data is non empty list of rows."""
         blob = self._extract_blob(built_html, "ALL_DATA")
         data = json.loads(blob)
         assert isinstance(data, list)
@@ -319,6 +349,7 @@ class TestEmbeddedJsonBlocks:
             assert "price" in row
 
     def test_dep_curves_has_one_entry_per_variant(self, built_html: str):
+        """Dep curves has one entry per variant."""
         blob = self._extract_blob(built_html, "DEP_CURVES")
         curves = json.loads(blob)
         # Fixture has 2 variants (Bolt Base, Bolt Sport) with enough points
@@ -328,6 +359,7 @@ class TestEmbeddedJsonBlocks:
         )
 
     def test_variant_colours_match_profile(self, built_html: str, loaded_profile: dict):
+        """Variant colours match profile."""
         blob = self._extract_blob(built_html, "VARIANT_COLOURS")
         colours = json.loads(blob)
         for v in loaded_profile["variants"]:

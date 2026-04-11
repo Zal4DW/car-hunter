@@ -8,7 +8,9 @@ from dashboard_lib import ols_regression
 
 
 class TestPerfectFits:
+    """Perfect fits test cases."""
     def test_recovers_known_coefficients_for_simple_linear_model(self):
+        """Recovers known coefficients for simple linear model."""
         # y = 3 + 2x with no noise
         X = [[1, x] for x in range(1, 11)]
         y = [3 + 2 * x for x in range(1, 11)]
@@ -18,6 +20,7 @@ class TestPerfectFits:
         assert r2 == pytest.approx(1.0, abs=1e-9)
 
     def test_recovers_multivariate_coefficients(self):
+        """Recovers multivariate coefficients."""
         # y = 10 - 0.5*x1 + 3*x2
         points = [
             (1, 4),
@@ -39,13 +42,16 @@ class TestPerfectFits:
 
 
 class TestNoisyFits:
+    """Noisy fits test cases."""
     def test_r_squared_between_zero_and_one_for_noisy_data(self):
+        """R squared between zero and one for noisy data."""
         X = [[1, x] for x in range(1, 21)]
         y = [2 * x + (1 if x % 2 == 0 else -1) for x in range(1, 21)]
         _, r2 = ols_regression(X, y)
         assert 0 < r2 < 1
 
     def test_intercept_only_model_returns_mean(self):
+        """Intercept only model returns mean."""
         X = [[1], [1], [1], [1]]
         y = [5, 7, 9, 11]
         coeffs, r2 = ols_regression(X, y)
@@ -54,7 +60,9 @@ class TestNoisyFits:
 
 
 class TestEdgeCases:
+    """Edge cases test cases."""
     def test_zero_variance_y_returns_r_squared_zero(self):
+        """Zero variance y returns r squared zero."""
         X = [[1, x] for x in range(1, 6)]
         y = [5, 5, 5, 5, 5]
         coeffs, r2 = ols_regression(X, y)
@@ -63,6 +71,7 @@ class TestEdgeCases:
         assert r2 == 0
 
     def test_collinear_column_does_not_crash(self):
+        """Collinear column does not crash."""
         # x2 = 2*x1 - perfectly collinear
         X = [[1, 1, 2], [1, 2, 4], [1, 3, 6], [1, 4, 8]]
         y = [5, 10, 15, 20]

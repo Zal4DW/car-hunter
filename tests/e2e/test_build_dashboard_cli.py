@@ -11,6 +11,7 @@ PYTHONPATH. `coverage combine` afterwards merges the subprocess datafiles
 with the in-process ones so the final report covers build_dashboard.py too.
 """
 
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -32,6 +33,7 @@ def dashboard_output(
     fixture_csv_path: Path,
     subprocess_env: dict,
 ):
+    """Dashboard output."""
     output_html = tmp_path / "acme-bolt-dashboard.html"
     result = subprocess.run(
         [
@@ -55,7 +57,9 @@ def dashboard_output(
 
 
 class TestBuilderExitStatus:
+    """Builder exit status test cases."""
     def test_builder_exits_cleanly(self, dashboard_output):
+        """Builder exits cleanly."""
         result, _ = dashboard_output
         assert result.returncode == 0, (
             f"Builder failed:\nstdout: {result.stdout}\nstderr: {result.stderr}"
@@ -63,41 +67,51 @@ class TestBuilderExitStatus:
 
 
 class TestBuilderStdout:
+    """Builder stdout test cases."""
     def test_reports_loaded_listing_count(self, dashboard_output):
+        """Reports loaded listing count."""
         result, _ = dashboard_output
         assert "Loaded 19 listings" in result.stdout
 
     def test_reports_regression_r_squared(self, dashboard_output):
+        """Reports regression r squared."""
         result, _ = dashboard_output
         assert "Regression R" in result.stdout
 
     def test_reports_profile_display_name(self, dashboard_output):
+        """Reports profile display name."""
         result, _ = dashboard_output
         assert "Acme Bolt EV" in result.stdout
 
     def test_excludes_brand_new_stock_from_regression(self, dashboard_output):
+        """Excludes brand new stock from regression."""
         # Fixture has 19 total, 1 brand new, 18 used with age >= 0.5
         result, _ = dashboard_output
         assert "Regression on 18 used listings" in result.stdout
 
 
 class TestBuilderOutput:
+    """Builder output test cases."""
     def test_writes_html_file(self, dashboard_output):
+        """Writes html file."""
         _, output_html = dashboard_output
         assert output_html.exists(), "dashboard HTML was not written"
         assert output_html.stat().st_size > 0
 
     def test_html_contains_profile_title(self, dashboard_output):
+        """Html contains profile title."""
         _, output_html = dashboard_output
         html = output_html.read_text()
         assert "Acme Bolt EV" in html
 
     def test_html_includes_chartjs(self, dashboard_output):
+        """Html includes chartjs."""
         _, output_html = dashboard_output
         html = output_html.read_text()
         assert "chart.js" in html.lower() or "chart.umd" in html.lower()
 
     def test_html_renders_both_variants(self, dashboard_output):
+        """Html renders both variants."""
         _, output_html = dashboard_output
         html = output_html.read_text()
         assert "Bolt Base" in html
@@ -105,6 +119,7 @@ class TestBuilderOutput:
 
 
 class TestBuilderFailsHelpfully:
+    """Builder fails helpfully test cases."""
     def test_missing_profile_returns_nonzero(
         self,
         tmp_path: Path,
@@ -112,6 +127,7 @@ class TestBuilderFailsHelpfully:
         fixture_csv_path: Path,
         subprocess_env: dict,
     ):
+        """Missing profile returns nonzero."""
         result = subprocess.run(
             [
                 sys.executable,
@@ -135,6 +151,7 @@ class TestBuilderFailsHelpfully:
         fixture_profile_path: Path,
         subprocess_env: dict,
     ):
+        """Missing csv returns nonzero."""
         result = subprocess.run(
             [
                 sys.executable,
@@ -162,6 +179,7 @@ class TestBuilderEdgeCases:
     """
 
     def _run(self, builder_script, profile, csv, tmp_path, subprocess_env, extra_args=None):
+        """Run."""
         output_html = tmp_path / "edge-dashboard.html"
         args = [
             sys.executable,
@@ -364,3 +382,138 @@ class TestBuilderEdgeCases:
         )
         assert result.returncode != 0
         assert expected_token in (result.stderr + result.stdout)
+
+
+class TestSnapshotPipeline:
+    """Exercise the snapshot glob + watchlist + capture manifest pipeline.
+
+    Stages three dated CSVs containing a listing_id column into a tmp
+    directory and runs the builder against the latest. The builder should
+    load all three snapshots, diff today against the previous snapshot,
+    emit a 28-entry rolling time series, pick up the watchlist, and render
+    the capture badge.
+    """
+
+    def _run(self, builder_script, profile, csv, tmp_path, subprocess_env, extra=None):
+        """Run."""
+        output_html = tmp_path / "snap-dash.html"
+        args = [
+            sys.executable,
+            str(builder_script),
+            "--profile",
+            str(profile),
+            "--csv",
+            str(csv),
+            "--output",
+            str(output_html),
+            "--date",
+            "2026-04-10",
+        ]
+        if extra:
+            args.extend(extra)
+        result = subprocess.run(
+            args,
+            capture_output=True,
+            text=True,
+            env=subprocess_env,
+            timeout=BUILDER_TIMEOUT_SECONDS,
+        )
+        return result, output_html
+
+    def _stage(self, tmp_path: Path, fixture_dated_csvs) -> Path:
+        """Stage."""
+        for p in fixture_dated_csvs:
+            (tmp_path / p.name).write_bytes(p.read_bytes())
+        latest = max(fixture_dated_csvs, key=lambda p: p.name)
+        return tmp_path / latest.name
+
+    def test_builder_loads_all_snapshots(
+        self,
+        tmp_path: Path,
+        builder_script: Path,
+        fixture_profile_path: Path,
+        fixture_dated_csvs: list,
+        subprocess_env: dict,
+    ):
+        """Builder loads all snapshots."""
+        latest = self._stage(tmp_path, fixture_dated_csvs)
+        result, output_html = self._run(
+            builder_script, fixture_profile_path, latest, tmp_path, subprocess_env
+        )
+        assert result.returncode == 0, f"builder failed: {result.stderr}"
+        assert "Loaded 3 snapshots" in result.stdout
+        assert "Snapshot diff vs 2026-03-27" in result.stdout
+
+    def test_time_series_has_28_entries(
+        self,
+        tmp_path: Path,
+        builder_script: Path,
+        fixture_profile_path: Path,
+        fixture_dated_csvs: list,
+        subprocess_env: dict,
+    ):
+        """Time series has 28 entries."""
+        latest = self._stage(tmp_path, fixture_dated_csvs)
+        result, output_html = self._run(
+            builder_script, fixture_profile_path, latest, tmp_path, subprocess_env
+        )
+        assert result.returncode == 0
+        html = output_html.read_text()
+        match = re.search(r"const TIME_SERIES\s*=\s*", html)
+        assert match, "TIME_SERIES constant missing from generated HTML"
+        import json as _json
+        value, _ = _json.JSONDecoder().raw_decode(html[match.end():])
+        assert isinstance(value, list)
+        assert len(value) == 28
+        assert value[-1]["date"] == "2026-04-10"
+
+    def test_watchlist_marks_matching_row(
+        self,
+        tmp_path: Path,
+        builder_script: Path,
+        fixture_profile_path: Path,
+        fixture_dated_csvs: list,
+        fixture_watchlist_path: Path,
+        subprocess_env: dict,
+    ):
+        """Watchlist marks matching row."""
+        latest = self._stage(tmp_path, fixture_dated_csvs)
+        (tmp_path / "acme-bolt-watchlist.json").write_bytes(
+            fixture_watchlist_path.read_bytes()
+        )
+        result, output_html = self._run(
+            builder_script, fixture_profile_path, latest, tmp_path, subprocess_env
+        )
+        assert result.returncode == 0, f"builder failed: {result.stderr}"
+        assert "Loaded watchlist: 1" in result.stdout
+        html = output_html.read_text()
+        # The ALL_DATA row for the watched listing_id should have watched: true
+        match = re.search(r"const ALL_DATA\s*=\s*", html)
+        assert match, "ALL_DATA constant missing from generated HTML"
+        import json as _json
+        data, _ = _json.JSONDecoder().raw_decode(html[match.end():])
+        watched = [r for r in data if r.get("listing_id") == "202601150000000"]
+        assert len(watched) == 1
+        assert watched[0]["watched"] is True
+
+    def test_capture_manifest_amber_badge(
+        self,
+        tmp_path: Path,
+        builder_script: Path,
+        fixture_profile_path: Path,
+        fixture_dated_csvs: list,
+        fixture_capture_manifest_path: Path,
+        subprocess_env: dict,
+    ):
+        """Capture manifest amber badge."""
+        latest = self._stage(tmp_path, fixture_dated_csvs)
+        (tmp_path / "acme-bolt-capture-2026-04-10.json").write_bytes(
+            fixture_capture_manifest_path.read_bytes()
+        )
+        result, output_html = self._run(
+            builder_script, fixture_profile_path, latest, tmp_path, subprocess_env
+        )
+        assert result.returncode == 0, f"builder failed: {result.stderr}"
+        assert "Capture: partial" in result.stdout
+        html = output_html.read_text()
+        assert "capture-badge-amber" in html
