@@ -294,6 +294,42 @@ def load_listing_state(explicit_path, csv_dir, profile_name, has_listing_ids):
 _SNAPSHOT_DATE_RE = _re.compile(r"-(\d{4}-\d{2}-\d{2})\.csv$")
 
 
+def project_table_data(rows):
+    """Project enriched rows into the flat dict shape the JS table consumes.
+
+    Excludes brand-new stock. Each entry carries only the columns the
+    dashboard table renders.
+    """
+    table = []
+    for r in rows:
+        if r["is_brand_new_stock"]:
+            continue
+        table.append({
+            "variant": r["variant"],
+            "year": r["year"],
+            "age": r["age_years"],
+            "age_months": r["age_months"],
+            "price": r["price"],
+            "mileage": r["mileage"],
+            "predicted": r["predicted_price"],
+            "deviation": r["value_deviation"],
+            "deviation_pct": r["value_deviation_pct"],
+            "retained_pct": r["retained_pct"],
+            "dep_pa": r["depreciation_pa"] if r["age_years"] >= 0.5 else None,
+            "days_on_market": r["days_on_market"],
+            "price_change": r["price_change"],
+            "spec_text": r["spec_text"],
+            "spec_labels": r["spec_labels"],
+            "location": r["location"],
+            "autotrader_url": r["autotrader_url"],
+            "composite_key": r["composite_key"],
+            "listing_id": r["listing_id"],
+            "watched": r["watched"],
+            "watch_note": r["watch_note"],
+        })
+    return table
+
+
 def load_watchlist(csv_dir, profile_name):
     """Load the {profile_name}-watchlist.json sidecar if present.
 
@@ -1429,33 +1465,7 @@ def main():
 
 
     # Table data (all used cars, sorted by value_deviation ascending)
-    table_data = []
-    for r in rows:
-        if r["is_brand_new_stock"]:
-            continue
-        table_data.append({
-            "variant": r["variant"],
-            "year": r["year"],
-            "age": r["age_years"],
-            "age_months": r["age_months"],
-            "price": r["price"],
-            "mileage": r["mileage"],
-            "predicted": r["predicted_price"],
-            "deviation": r["value_deviation"],
-            "deviation_pct": r["value_deviation_pct"],
-            "retained_pct": r["retained_pct"],
-            "dep_pa": r["depreciation_pa"] if r["age_years"] >= 0.5 else None,
-            "days_on_market": r["days_on_market"],
-            "price_change": r["price_change"],
-            "spec_text": r["spec_text"],
-            "spec_labels": r["spec_labels"],
-            "location": r["location"],
-            "autotrader_url": r["autotrader_url"],
-            "composite_key": r["composite_key"],
-            "listing_id": r["listing_id"],
-            "watched": r["watched"],
-            "watch_note": r["watch_note"],
-        })
+    table_data = project_table_data(rows)
 
 
     # Price vs mileage
