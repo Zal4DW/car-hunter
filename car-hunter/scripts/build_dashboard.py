@@ -124,6 +124,15 @@ print(f"Date: {today_str}")
 rows = []
 with open(args.csv, "r") as f:
     reader = csv.DictReader(f)
+    _REQUIRED_CSV_COLS = {"variant", "price", "year", "mileage"}
+    if reader.fieldnames:
+        _missing_cols = _REQUIRED_CSV_COLS - set(reader.fieldnames)
+    else:
+        _missing_cols = _REQUIRED_CSV_COLS
+    if _missing_cols:
+        raise SystemExit(
+            f"CSV {args.csv} is missing required columns: {', '.join(sorted(_missing_cols))}"
+        )
     for r in reader:
         row = {
             "listing_id": r.get("listing_id", "") or "",
