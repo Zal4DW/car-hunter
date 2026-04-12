@@ -43,6 +43,51 @@ import glob as _glob
 import re as _re
 
 
+def load_profile(path):
+    """Load and validate a car profile JSON, returning derived lookups."""
+    with open(path, "r") as f:
+        profile = json.load(f)
+
+    _REQUIRED_KEYS = (
+        "profile_name", "display_name", "variants", "generations",
+        "spec_options", "search_filters", "dashboard",
+    )
+    _missing = [k for k in _REQUIRED_KEYS if k not in profile]
+    if _missing:
+        raise SystemExit(
+            f"Profile {path} is missing required keys: {', '.join(_missing)}. "
+            f"See car-profile-schema.md for the expected format."
+        )
+
+    variants = profile["variants"]
+    generations = profile["generations"]
+
+    variant_by_name = {v["name"]: v for v in variants}
+    variant_colours = {v["name"]: v["colour"] for v in variants}
+
+    new_prices = {}
+    for gen in generations:
+        for vname, price in gen.get("new_prices", {}).items():
+            if vname not in new_prices:
+                new_prices[vname] = price
+
+    return {
+        "profile": profile,
+        "profile_name": profile["profile_name"],
+        "display_name": profile["display_name"],
+        "variants": variants,
+        "generations": generations,
+        "spec_options": profile["spec_options"],
+        "search_filters": profile["search_filters"],
+        "dashboard": profile["dashboard"],
+        "reg_map": profile.get("reg_date_mapping", {}),
+        "lid_encoding": profile.get("listing_id_date_encoding", {"enabled": False}),
+        "variant_by_name": variant_by_name,
+        "variant_colours": variant_colours,
+        "new_prices": new_prices,
+    }
+
+
 def main():
     # ── Argument parsing ────────────────────────────────────────────────
 
@@ -61,41 +106,19 @@ def main():
 
     # ── Load profile ────────────────────────────────────────────────────
 
-    with open(args.profile, "r") as f:
-        profile = json.load(f)
-
-    _REQUIRED_PROFILE_KEYS = (
-        "profile_name", "display_name", "variants", "generations",
-        "spec_options", "search_filters", "dashboard",
-    )
-    _missing_keys = [k for k in _REQUIRED_PROFILE_KEYS if k not in profile]
-    if _missing_keys:
-        raise SystemExit(
-            f"Profile {args.profile} is missing required keys: {', '.join(_missing_keys)}. "
-            f"See car-profile-schema.md for the expected format."
-        )
-
-    PROFILE_NAME = profile["profile_name"]
-    DISPLAY_NAME = profile["display_name"]
-    VARIANTS = profile["variants"]
-    GENERATIONS = profile["generations"]
-    SPEC_OPTIONS = profile["spec_options"]
-    SEARCH_FILTERS = profile["search_filters"]
-    DASHBOARD = profile["dashboard"]
-    REG_MAP = profile.get("reg_date_mapping", {})
-    LID_ENCODING = profile.get("listing_id_date_encoding", {"enabled": False})
-
-    # Build variant lookup
-    VARIANT_BY_NAME = {v["name"]: v for v in VARIANTS}
-    VARIANT_COLOURS = {v["name"]: v["colour"] for v in VARIANTS}
-
-    # Build generation new price lookup: {variant_name: new_price}
-    # Uses the first matching generation for each variant
-    NEW_PRICES = {}
-    for gen in GENERATIONS:
-        for vname, price in gen.get("new_prices", {}).items():
-            if vname not in NEW_PRICES:
-                NEW_PRICES[vname] = price
+    _p = load_profile(args.profile)
+    PROFILE_NAME = _p["profile_name"]
+    DISPLAY_NAME = _p["display_name"]
+    VARIANTS = _p["variants"]
+    GENERATIONS = _p["generations"]
+    SPEC_OPTIONS = _p["spec_options"]
+    SEARCH_FILTERS = _p["search_filters"]
+    DASHBOARD = _p["dashboard"]
+    REG_MAP = _p["reg_map"]
+    LID_ENCODING = _p["lid_encoding"]
+    VARIANT_BY_NAME = _p["variant_by_name"]
+    VARIANT_COLOURS = _p["variant_colours"]
+    NEW_PRICES = _p["new_prices"]
 
     # Output path
     if args.output:
