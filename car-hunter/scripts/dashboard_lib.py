@@ -282,6 +282,20 @@ def validate_watchlist(data, source="watchlist"):
     return {"listings": listings}
 
 
+def row_to_features(row, variant_by_name, tier_features):
+    """Convert a row dict into the regression feature vector.
+
+    Layout: [intercept, age_months, mileage, spec_score, is_tier_1, is_tier_2, ...].
+    Used by both build_feature_matrix (training) and the builder's prediction loop,
+    so both sides stay in sync when a new feature is added.
+    """
+    tier = get_tier_value(row, variant_by_name)
+    features = [1, row["age_months"], row["mileage"], row["spec_score"]]
+    for tf in tier_features:
+        features.append(1 if tier == tf["tier"] else 0)
+    return features
+
+
 def build_feature_matrix(reg_rows, variant_by_name, tier_features):
     """Assemble the OLS feature matrix used by the depreciation regression.
 
@@ -292,10 +306,6 @@ def build_feature_matrix(reg_rows, variant_by_name, tier_features):
     X = []
     y = []
     for r in reg_rows:
-        tier = get_tier_value(r, variant_by_name)
-        features = [1, r["age_months"], r["mileage"], r["spec_score"]]
-        for tf in tier_features:
-            features.append(1 if tier == tf["tier"] else 0)
-        X.append(features)
+        X.append(row_to_features(r, variant_by_name, tier_features))
         y.append(r["price"])
     return X, y

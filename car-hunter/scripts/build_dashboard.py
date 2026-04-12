@@ -34,6 +34,7 @@ from dashboard_lib import (  # noqa: E402
     get_tier_value as _get_tier_value,
     retained_pct as _retained_pct,
     build_feature_matrix,
+    row_to_features,
     extract_listing_id,
     snapshot_diff,
     rolling_window,
@@ -125,10 +126,7 @@ def run_regression(rows, variant_by_name, tier_features):
         r_squared = 0
 
     for r in rows:
-        tier = _get_tier_value(r, variant_by_name)
-        features = [1, r["age_months"], r["mileage"], r["spec_score"]]
-        for tf in tier_features:
-            features.append(1 if tier == tf["tier"] else 0)
+        features = row_to_features(r, variant_by_name, tier_features)
         predicted = sum(f * c for f, c in zip(features, coeffs))
         r["predicted_price"] = round(predicted)
         r["value_deviation"] = round(r["price"] - predicted)
