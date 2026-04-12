@@ -402,6 +402,66 @@ class TestBuilderEdgeCases:
         )
         return result, output_html
 
+    def test_skipped_snapshots_produce_warnings(
+        self,
+        tmp_path: Path,
+        builder_script: Path,
+        fixture_profile_path: Path,
+        fixture_csv_path: Path,
+        subprocess_env: dict,
+    ):
+        """Snapshot files that can't be used must produce visible warnings.
+
+        Silently dropping a snapshot is how users lose data without knowing.
+        Skipped files must be named in stdout.
+        """
+        # Simulate a user workspace by copying the fixture CSV with the expected
+        # dated filename, plus two bad siblings.
+        workspace = tmp_path / "workspace"
+        workspace.mkdir()
+        profile_name = "acme-bolt"
+
+        # Today's snapshot (needed for the builder to find a usable one)
+        today_csv = workspace / f"{profile_name}-all-listings-2026-04-10.csv"
+        today_csv.write_text(fixture_csv_path.read_text())
+
+        # Bad date: Feb 30
+        bad_date_csv = workspace / f"{profile_name}-all-listings-2026-02-30.csv"
+        bad_date_csv.write_text(fixture_csv_path.read_text())
+
+        # No listing_id column
+        no_id_csv = workspace / f"{profile_name}-all-listings-2026-03-15.csv"
+        no_id_csv.write_text("variant,price,year,mileage\nBolt Base,35000,2023,15000\n")
+
+        output_html = workspace / f"{profile_name}-dashboard.html"
+        result = subprocess.run(
+            [
+                sys.executable,
+                str(builder_script),
+                "--profile",
+                str(fixture_profile_path),
+                "--csv",
+                str(today_csv),
+                "--output",
+                str(output_html),
+                "--date",
+                "2026-04-10",
+            ],
+            capture_output=True,
+            text=True,
+            env=subprocess_env,
+            timeout=BUILDER_TIMEOUT_SECONDS,
+        )
+        assert result.returncode == 0, f"builder failed: {result.stderr}"
+        combined = result.stderr + result.stdout
+        # Both skipped files should be named in a warning so the user knows.
+        assert "2026-02-30" in combined, (
+            "Feb 30 snapshot must be reported as skipped, not silently dropped"
+        )
+        assert "2026-03-15" in combined, (
+            "snapshot without listing_id must be reported as skipped"
+        )
+
     def test_sparse_csv_triggers_regression_fallback(
         self,
         tmp_path: Path,

@@ -1234,16 +1234,18 @@ def main():
     for _snap_path in sorted(_glob.glob(_snap_pattern)):
         _m = _date_re.search(_snap_path)
         if not _m:
+            print(f"WARNING: skipping snapshot {_snap_path}: filename has no date tag")
             continue
         try:
             _ys, _ms, _ds = _m.group(1).split("-")
             _snap_date = date(int(_ys), int(_ms), int(_ds))
-        except ValueError:
+        except ValueError as _exc:
+            print(f"WARNING: skipping snapshot {_snap_path}: invalid date in filename ({_exc})")
             continue
         with open(_snap_path, "r") as _sf:
             _reader = csv.DictReader(_sf)
             if _reader.fieldnames is None or "listing_id" not in _reader.fieldnames:
-                # Snapshot file has no listing_id column at all - cannot diff it.
+                print(f"WARNING: skipping snapshot {_snap_path}: no listing_id column, cannot cross-reference")
                 continue
             _snap_rows = list(_reader)
         # A header-only file is still a valid empty snapshot (all listings sold).
