@@ -286,6 +286,64 @@ def validate_watchlist(data, source="watchlist"):
     return {"listings": listings}
 
 
+def compute_dep_curves(rows):
+    """Per-variant depreciation curve data for the dashboard.
+
+    Groups non-brand-new rows by variant, fits a quadratic y = a + bx + cx^2
+    via fit_poly2, samples 50 points along the observed age range, and
+    computes a flattening point where the slope drops to half the initial.
+
+    Variants with fewer than 5 rows are skipped (too few to fit reliably).
+    Returns `{variant_name: {points, curve, poly, flatten_month}}`.
+    """
+    grouped = {}
+    for r in rows:
+        if r.get("is_brand_new_stock"):
+            continue
+        v = r["variant"]
+        if v not in grouped:
+            grouped[v] = []
+        grouped[v].append({
+            "age_months": r["age_months"],
+            "price": r["price"],
+            "location": r.get("location", ""),
+            "mileage": r.get("mileage", 0),
+        })
+
+    curves = {}
+    for variant, points in grouped.items():
+        if len(points) < 5:
+            continue
+        poly = fit_poly2(points)
+        ages = sorted(set(p["age_months"] for p in points))
+        min_age = min(ages)
+        max_age = max(ages)
+        curve_points = []
+        step = max(1, (max_age - min_age) / 50)
+        a = min_age
+        while a <= max_age:
+            predicted = poly[0] + poly[1] * a + poly[2] * a * a
+            curve_points.append({"x": round(a, 1), "y": round(predicted)})
+            a += step
+
+        flatten_month = None
+        if abs(poly[2]) > 0.001:
+            flatten_month = round(-poly[1] / (4 * poly[2]), 0)
+            if flatten_month < min_age or flatten_month > max_age:
+                flatten_month = None
+
+        curves[variant] = {
+            "points": [
+                {"x": p["age_months"], "y": p["price"], "location": p["location"], "mileage": p["mileage"]}
+                for p in points
+            ],
+            "curve": curve_points,
+            "poly": poly,
+            "flatten_month": flatten_month,
+        }
+    return curves
+
+
 def compute_spec_premiums(reg_rows, spec_options):
     """For each spec option, compute the average value-deviation delta
     between rows with the spec present vs absent.

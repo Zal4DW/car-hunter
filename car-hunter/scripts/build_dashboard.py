@@ -34,6 +34,7 @@ from dashboard_lib import (  # noqa: E402
     get_tier_value as _get_tier_value,
     retained_pct as _retained_pct,
     build_feature_matrix,
+    compute_dep_curves,
     compute_spec_premiums,
     row_to_features,
     extract_listing_id,
@@ -1415,53 +1416,7 @@ def main():
 
     # ── Depreciation curve data ─────────────────────────────────────────
 
-    dep_curve_data = {}
-    for r in rows:
-        if r["is_brand_new_stock"]:
-            continue
-        v = r["variant"]
-        if v not in dep_curve_data:
-            dep_curve_data[v] = []
-        dep_curve_data[v].append({
-            "age_months": r["age_months"],
-            "price": r["price"],
-            "location": r["location"],
-            "mileage": r["mileage"],
-        })
-
-
-    dep_curves = {}
-    for variant, points in dep_curve_data.items():
-        if len(points) < 5:
-            continue
-        poly = fit_poly2(points)
-        ages = sorted(set(p["age_months"] for p in points))
-        min_age = min(ages)
-        max_age = max(ages)
-        curve_points = []
-        step = max(1, (max_age - min_age) / 50)
-        a = min_age
-        while a <= max_age:
-            predicted = poly[0] + poly[1] * a + poly[2] * a * a
-            curve_points.append({"x": round(a, 1), "y": round(predicted)})
-            a += step
-
-        # Flattening point: where slope drops to half initial
-        flatten_month = None
-        if abs(poly[2]) > 0.001:
-            flatten_month = round(-poly[1] / (4 * poly[2]), 0)
-            if flatten_month < min_age or flatten_month > max_age:
-                flatten_month = None
-
-        dep_curves[variant] = {
-            "points": [
-                {"x": p["age_months"], "y": p["price"], "location": p["location"], "mileage": p["mileage"]}
-                for p in points
-            ],
-            "curve": curve_points,
-            "poly": poly,
-            "flatten_month": flatten_month,
-        }
+    dep_curves = compute_dep_curves(rows)
 
     for v, d in dep_curves.items():
         fm = d["flatten_month"]
