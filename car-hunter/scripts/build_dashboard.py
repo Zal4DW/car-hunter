@@ -88,6 +88,76 @@ def load_profile(path):
     }
 
 
+def enrich_rows(rows, snapshots, watchlist, listing_ids, price_changes, lid_encoding, today, has_listing_ids):
+    """Add composite keys, AutoTrader URLs, days-on-market, price changes, watchlist stars.
+
+    Mutates rows in place. Returns the SNAPSHOT_PULSE summary dict used by Market Pulse.
+    """
+    pulse = {"new": 0, "removed": 0, "price_drops": 0, "previous_date": None}
+
+    for row in rows:
+        row["composite_key"] = f"{row['price']}_{row['location']}"
+        row["autotrader_url"] = None
+        row["days_on_market"] = None
+        row["price_change"] = 0
+        row["watched"] = False
+        row["watch_note"] = ""
+
+    if has_listing_ids:
+        rows_by_id = {r["listing_id"]: r for r in rows if r["listing_id"]}
+
+        for row in rows:
+            lid = row["listing_id"]
+            if not lid:
+                continue
+            if lid_encoding.get("enabled") and lid.isdigit():
+                row["autotrader_url"] = f"https://www.autotrader.co.uk/car-details/{lid}"
+                ld = parse_listing_date(lid)
+                if ld:
+                    row["days_on_market"] = (today - ld).days
+
+        today_snap = next((s for s in snapshots if s["date"] == today), None)
+        prior = [s for s in snapshots if s["date"] < today]
+        if today_snap and prior:
+            prev = prior[-1]
+            diff = snapshot_diff(
+                [{"listing_id": r.get("listing_id", ""), "price": int(r.get("price", 0) or 0)} for r in prev["rows"]],
+                [{"listing_id": r.get("listing_id", ""), "price": int(r.get("price", 0) or 0)} for r in today_snap["rows"]],
+            )
+            for ch in diff["price_changed"]:
+                r = rows_by_id.get(ch["id"])
+                if r is not None:
+                    r["price_change"] = ch["delta"]
+            pulse = {
+                "new": len(diff["new"]),
+                "removed": len(diff["removed"]),
+                "price_drops": sum(1 for c in diff["price_changed"] if c["delta"] < 0),
+                "previous_date": prev["date"].isoformat(),
+            }
+            print(
+                f"Snapshot diff vs {prev['date'].isoformat()}: "
+                f"+{pulse['new']} new, -{pulse['removed']} removed, "
+                f"{pulse['price_drops']} price drops"
+            )
+
+        wl = watchlist["listings"]
+        for row in rows:
+            if row["listing_id"] in wl:
+                row["watched"] = True
+                row["watch_note"] = wl[row["listing_id"]].get("note", "") if isinstance(wl[row["listing_id"]], dict) else ""
+    else:
+        for row in rows:
+            key = row["composite_key"]
+            lid = listing_ids.get(key)
+            if lid and lid_encoding.get("enabled"):
+                row["autotrader_url"] = f"https://www.autotrader.co.uk/car-details/{lid}"
+                ld = parse_listing_date(lid)
+                row["days_on_market"] = (today - ld).days if ld else None
+            row["price_change"] = price_changes.get(key, 0)
+
+    return pulse
+
+
 def load_listing_state(explicit_path, csv_dir, profile_name, has_listing_ids):
     """Resolve and load the listing-state sidecar JSON.
 
@@ -369,78 +439,11 @@ def main():
     )
 
     # ── Composite keys, snapshot diffing, listing tracking ─────────────
-    # Two mutually exclusive paths:
-    #   (a) CSV has `listing_id` column -> snapshot-driven diff across the
-    #       dated CSV archive for price changes, days-on-market, and the
-    #       new vs removed counts consumed by Market Pulse.
-    #   (b) CSV is legacy (no listing_id) -> fall back to the sidecar
-    #       composite-key lookup preserved above.
 
-    SNAPSHOT_PULSE = {"new": 0, "removed": 0, "price_drops": 0, "previous_date": None}
-
-    for row in rows:
-        row["composite_key"] = f"{row['price']}_{row['location']}"
-        row["autotrader_url"] = None
-        row["days_on_market"] = None
-        row["price_change"] = 0
-        row["watched"] = False
-        row["watch_note"] = ""
-
-    if _has_listing_ids:
-        rows_by_id = {r["listing_id"]: r for r in rows if r["listing_id"]}
-
-        # AutoTrader URL + days-on-market from the id itself when encoded.
-        for row in rows:
-            lid = row["listing_id"]
-            if not lid:
-                continue
-            if LID_ENCODING.get("enabled") and lid.isdigit():
-                row["autotrader_url"] = f"https://www.autotrader.co.uk/car-details/{lid}"
-                ld = parse_listing_date(lid)
-                if ld:
-                    row["days_on_market"] = (today - ld).days
-
-        # Snapshot diff: today vs the most recent prior snapshot.
-        _today_snap = next((s for s in SNAPSHOTS if s["date"] == today), None)
-        _prior = [s for s in SNAPSHOTS if s["date"] < today]
-        if _today_snap and _prior:
-            _prev = _prior[-1]
-            _diff = snapshot_diff(
-                [{"listing_id": r.get("listing_id", ""), "price": int(r.get("price", 0) or 0)} for r in _prev["rows"]],
-                [{"listing_id": r.get("listing_id", ""), "price": int(r.get("price", 0) or 0)} for r in _today_snap["rows"]],
-            )
-            for ch in _diff["price_changed"]:
-                r = rows_by_id.get(ch["id"])
-                if r is not None:
-                    r["price_change"] = ch["delta"]
-            SNAPSHOT_PULSE = {
-                "new": len(_diff["new"]),
-                "removed": len(_diff["removed"]),
-                "price_drops": sum(1 for c in _diff["price_changed"] if c["delta"] < 0),
-                "previous_date": _prev["date"].isoformat(),
-            }
-            print(
-                f"Snapshot diff vs {_prev['date'].isoformat()}: "
-                f"+{SNAPSHOT_PULSE['new']} new, -{SNAPSHOT_PULSE['removed']} removed, "
-                f"{SNAPSHOT_PULSE['price_drops']} price drops"
-            )
-
-        # Apply watchlist stars.
-        _wl = WATCHLIST["listings"]
-        for row in rows:
-            if row["listing_id"] in _wl:
-                row["watched"] = True
-                row["watch_note"] = _wl[row["listing_id"]].get("note", "") if isinstance(_wl[row["listing_id"]], dict) else ""
-    else:
-        # Legacy sidecar path: apply composite-key lookups.
-        for row in rows:
-            key = row["composite_key"]
-            lid = LISTING_IDS.get(key)
-            if lid and LID_ENCODING.get("enabled"):
-                row["autotrader_url"] = f"https://www.autotrader.co.uk/car-details/{lid}"
-                ld = parse_listing_date(lid)
-                row["days_on_market"] = (today - ld).days if ld else None
-            row["price_change"] = PRICE_CHANGES.get(key, 0)
+    SNAPSHOT_PULSE = enrich_rows(
+        rows, SNAPSHOTS, WATCHLIST, LISTING_IDS, PRICE_CHANGES,
+        LID_ENCODING, today, _has_listing_ids,
+    )
 
     # ── Rolling 28-day time series ──────────────────────────────────────
     TIME_SERIES = []
