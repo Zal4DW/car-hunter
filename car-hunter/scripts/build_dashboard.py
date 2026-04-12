@@ -88,6 +88,47 @@ def load_profile(path):
     }
 
 
+def run_regression(rows, variant_by_name, tier_features):
+    """Fit a multivariate OLS model over used listings, then annotate all rows.
+
+    Mutates rows in place with `predicted_price`, `value_deviation`, and
+    `value_deviation_pct`. Returns (coeffs, r_squared, reg_data) where
+    reg_data is the subset of rows used for fitting.
+    """
+    reg_data = [r for r in rows if not r["is_brand_new_stock"] and r["age_years"] >= 0.5]
+    print(f"Regression on {len(reg_data)} used listings (age >= 6 months)")
+
+    feature_names = ["intercept", "age_months", "mileage", "spec_score"] + [
+        tf["name"] for tf in tier_features
+    ]
+
+    X, y = build_feature_matrix(reg_data, variant_by_name, tier_features)
+
+    if len(X) >= len(feature_names):
+        coeffs, r_squared = ols_regression(X, y)
+        print(f"Regression R² = {r_squared:.4f}")
+        print(f"Features: {feature_names}")
+        print(f"Coefficients: {[f'{c:.2f}' for c in coeffs]}")
+    else:
+        print(f"WARNING: Not enough data for regression ({len(X)} rows, {len(feature_names)} features)")
+        coeffs = [0] * len(feature_names)
+        r_squared = 0
+
+    for r in rows:
+        tier = _get_tier_value(r, variant_by_name)
+        features = [1, r["age_months"], r["mileage"], r["spec_score"]]
+        for tf in tier_features:
+            features.append(1 if tier == tf["tier"] else 0)
+        predicted = sum(f * c for f, c in zip(features, coeffs))
+        r["predicted_price"] = round(predicted)
+        r["value_deviation"] = round(r["price"] - predicted)
+        r["value_deviation_pct"] = (
+            round((r["price"] - predicted) / predicted * 100, 1) if predicted > 0 else 0
+        )
+
+    return coeffs, r_squared, reg_data
+
+
 def enrich_rows(rows, snapshots, watchlist, listing_ids, price_changes, lid_encoding, today, has_listing_ids):
     """Add composite keys, AutoTrader URLs, days-on-market, price changes, watchlist stars.
 
@@ -478,39 +519,7 @@ def main():
     # ── Multivariate regression ─────────────────────────────────────────
     # price = b0 + b1*age_months + b2*mileage + b3*spec_score + b4*tier_1 + b5*tier_2 + ...
 
-    reg_data = [r for r in rows if not r["is_brand_new_stock"] and r["age_years"] >= 0.5]
-    print(f"Regression on {len(reg_data)} used listings (age >= 6 months)")
-
-
-    # Build feature matrix: [intercept, age_months, mileage, spec_score, tier_1, tier_2, ...]
-    feature_names = ["intercept", "age_months", "mileage", "spec_score"] + [
-        tf["name"] for tf in tier_features
-    ]
-
-    X, y = build_feature_matrix(reg_data, VARIANT_BY_NAME, tier_features)
-
-    if len(X) >= len(feature_names):
-        coeffs, r_squared = ols_regression(X, y)
-        print(f"Regression R² = {r_squared:.4f}")
-        print(f"Features: {feature_names}")
-        print(f"Coefficients: {[f'{c:.2f}' for c in coeffs]}")
-    else:
-        print(f"WARNING: Not enough data for regression ({len(X)} rows, {len(feature_names)} features)")
-        coeffs = [0] * len(feature_names)
-        r_squared = 0
-
-    # Predict and compute residuals for ALL used cars
-    for r in rows:
-        tier = _get_tier_value(r, VARIANT_BY_NAME)
-        features = [1, r["age_months"], r["mileage"], r["spec_score"]]
-        for tf in tier_features:
-            features.append(1 if tier == tf["tier"] else 0)
-        predicted = sum(f * c for f, c in zip(features, coeffs))
-        r["predicted_price"] = round(predicted)
-        r["value_deviation"] = round(r["price"] - predicted)
-        r["value_deviation_pct"] = (
-            round((r["price"] - predicted) / predicted * 100, 1) if predicted > 0 else 0
-        )
+    coeffs, r_squared, reg_data = run_regression(rows, VARIANT_BY_NAME, tier_features)
 
     # ── Spec premium calculation ────────────────────────────────────────
 
