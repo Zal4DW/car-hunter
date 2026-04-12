@@ -88,6 +88,67 @@ def load_profile(path):
     }
 
 
+def load_listing_state(explicit_path, csv_dir, profile_name, has_listing_ids):
+    """Resolve and load the listing-state sidecar JSON.
+
+    Returns (listing_ids, price_changes) dicts. Both empty if no sidecar found.
+    """
+    state_path = None
+    if explicit_path:
+        state_path = explicit_path
+    elif not has_listing_ids:
+        auto = os.path.join(csv_dir, f"{profile_name}-listing-state.json")
+        if os.path.isfile(auto):
+            state_path = auto
+
+    if not state_path:
+        return {}, {}
+
+    try:
+        with open(state_path, "r") as f:
+            state = json.load(f)
+    except json.JSONDecodeError as exc:
+        raise SystemExit(
+            f"Listing state file {state_path} is not valid JSON: {exc}"
+        ) from exc
+
+    if not isinstance(state, dict):
+        raise SystemExit(
+            f"Listing state file {state_path} must contain a JSON object, "
+            f"got {type(state).__name__}"
+        )
+    lids = state.get("listing_ids", {})
+    prices = state.get("price_changes", {})
+    if not isinstance(lids, dict):
+        raise SystemExit(
+            f"Listing state file {state_path}: 'listing_ids' must be an object, "
+            f"got {type(lids).__name__}"
+        )
+    if not isinstance(prices, dict):
+        raise SystemExit(
+            f"Listing state file {state_path}: 'price_changes' must be an object, "
+            f"got {type(prices).__name__}"
+        )
+    for k, v in lids.items():
+        if not isinstance(k, str) or not isinstance(v, str):
+            raise SystemExit(
+                f"Listing state file {state_path}: 'listing_ids' entries must map "
+                f"string keys to string values, got {k!r}: {v!r}"
+            )
+    for k, v in prices.items():
+        if not isinstance(k, str) or not isinstance(v, (int, float)):
+            raise SystemExit(
+                f"Listing state file {state_path}: 'price_changes' entries must map "
+                f"string keys to numeric values, got {k!r}: {v!r}"
+            )
+
+    print(
+        f"Loaded listing state from {state_path}: "
+        f"{len(lids)} listing IDs, {len(prices)} price changes"
+    )
+    return lids, prices
+
+
 def load_csv(path, spec_options):
     """Load and validate listings from a CSV file, returning a list of row dicts."""
     rows = []
@@ -302,80 +363,10 @@ def main():
         print(f"Loaded watchlist: {len(WATCHLIST['listings'])} starred listings")
 
     # ── Listing IDs and price changes ───────────────────────────────────
-    # Loaded from an optional sidecar JSON keyed by composite key {price}_{location}.
-    # The sidecar is resolved in this order:
-    #   1. --listing-state <path> CLI argument, if provided
-    #   2. {csv_dir}/{profile_name}-listing-state.json, if it exists
-    #   3. Neither - LISTING_IDS and PRICE_CHANGES stay empty (no trend arrows,
-    #      no days-on-market)
-    #
-    # Expected sidecar shape:
-    #   { "listing_ids":    { "42500_Testville": "20251202...", ... },
-    #     "price_changes":  { "42500_Testville": -500,          ... } }
 
-    LISTING_IDS = {}
-    PRICE_CHANGES = {}
-
-    _state_path = None
-    if args.listing_state:
-        _state_path = args.listing_state
-    elif not _has_listing_ids:
-        # Only auto-detect the legacy sidecar when the CSV lacks the listing_id
-        # column. Snapshot-driven diffing supersedes it when ids are present.
-        _auto = os.path.join(_csv_dir, f"{PROFILE_NAME}-listing-state.json")
-        if os.path.isfile(_auto):
-            _state_path = _auto
-
-    if _state_path:
-        try:
-            with open(_state_path, "r") as f:
-                _state = json.load(f)
-        except json.JSONDecodeError as _exc:
-            raise SystemExit(
-                f"Listing state file {_state_path} is not valid JSON: {_exc}"
-            ) from _exc
-
-        # Fail loudly on malformed sidecars. Silent fallback to empty dicts
-        # would hide typos in the file and leave the user wondering why
-        # days-on-market never appears in their dashboard.
-        if not isinstance(_state, dict):
-            raise SystemExit(
-                f"Listing state file {_state_path} must contain a JSON object, "
-                f"got {type(_state).__name__}"
-            )
-        _lids = _state.get("listing_ids", {})
-        _prices = _state.get("price_changes", {})
-        if not isinstance(_lids, dict):
-            raise SystemExit(
-                f"Listing state file {_state_path}: 'listing_ids' must be an object, "
-                f"got {type(_lids).__name__}"
-            )
-        if not isinstance(_prices, dict):
-            raise SystemExit(
-                f"Listing state file {_state_path}: 'price_changes' must be an object, "
-                f"got {type(_prices).__name__}"
-            )
-        # Validate listing_ids values are strings (AutoTrader IDs are digit strings).
-        for _k, _v in _lids.items():
-            if not isinstance(_k, str) or not isinstance(_v, str):
-                raise SystemExit(
-                    f"Listing state file {_state_path}: 'listing_ids' entries must map "
-                    f"string keys to string values, got {_k!r}: {_v!r}"
-                )
-        # price_changes values should be numeric (signed GBP delta).
-        for _k, _v in _prices.items():
-            if not isinstance(_k, str) or not isinstance(_v, (int, float)):
-                raise SystemExit(
-                    f"Listing state file {_state_path}: 'price_changes' entries must map "
-                    f"string keys to numeric values, got {_k!r}: {_v!r}"
-                )
-
-        LISTING_IDS = _lids
-        PRICE_CHANGES = _prices
-        print(
-            f"Loaded listing state from {_state_path}: "
-            f"{len(LISTING_IDS)} listing IDs, {len(PRICE_CHANGES)} price changes"
-        )
+    LISTING_IDS, PRICE_CHANGES = load_listing_state(
+        args.listing_state, _csv_dir, PROFILE_NAME, _has_listing_ids
+    )
 
     # ── Composite keys, snapshot diffing, listing tracking ─────────────
     # Two mutually exclusive paths:
