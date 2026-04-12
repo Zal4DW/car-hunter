@@ -88,6 +88,61 @@ def load_profile(path):
     }
 
 
+def load_csv(path, spec_options):
+    """Load and validate listings from a CSV file, returning a list of row dicts."""
+    rows = []
+    with open(path, "r") as f:
+        reader = csv.DictReader(f)
+        _REQUIRED_CSV_COLS = {"variant", "price", "year", "mileage"}
+        if reader.fieldnames:
+            _missing_cols = _REQUIRED_CSV_COLS - set(reader.fieldnames)
+        else:
+            _missing_cols = _REQUIRED_CSV_COLS
+        if _missing_cols:
+            raise SystemExit(
+                f"CSV {path} is missing required columns: {', '.join(sorted(_missing_cols))}"
+            )
+        for _row_num, r in enumerate(reader, start=1):
+            try:
+                row = {
+                    "listing_id": r.get("listing_id", "") or "",
+                    "variant": r["variant"],
+                    "generation": r.get("generation", ""),
+                    "price": int(r["price"]),
+                    "year": int(r["year"]),
+                    "reg": r.get("reg", ""),
+                    "reg_date": float(r.get("reg_date", 0) or 0),
+                    "age_years": float(r.get("age_years", 0) or 0),
+                    "age_months": round(float(r.get("age_years", 0) or 0) * 12, 1),
+                    "mileage": int(r["mileage"]),
+                    "new_price": int(r.get("new_price", 0) or 0),
+                    "depreciation_total": int(r.get("depreciation_total", 0) or 0),
+                    "depreciation_pa": int(r.get("depreciation_pa", 0) or 0),
+                    "location": r.get("location", ""),
+                    "is_brand_new_stock": r.get("is_brand_new_stock", "False") == "True",
+                }
+            except (ValueError, KeyError) as exc:
+                raise SystemExit(
+                    f"CSV row {_row_num}: cannot parse field - {exc}"
+                ) from exc
+
+            for spec in spec_options:
+                key = spec["key"]
+                row[key] = r.get(key, "False") == "True"
+
+            try:
+                row["options_count"] = int(r.get("options_count", 0) or 0)
+            except ValueError as exc:
+                raise SystemExit(
+                    f"CSV row {_row_num}: cannot parse field 'options_count' - {exc}"
+                ) from exc
+
+            row["retained_pct"] = _retained_pct(row["price"], row["new_price"])
+
+            rows.append(row)
+    return rows
+
+
 def main():
     # ── Argument parsing ────────────────────────────────────────────────
 
@@ -146,58 +201,7 @@ def main():
 
     # ── Load and parse CSV ──────────────────────────────────────────────
 
-    rows = []
-    with open(args.csv, "r") as f:
-        reader = csv.DictReader(f)
-        _REQUIRED_CSV_COLS = {"variant", "price", "year", "mileage"}
-        if reader.fieldnames:
-            _missing_cols = _REQUIRED_CSV_COLS - set(reader.fieldnames)
-        else:
-            _missing_cols = _REQUIRED_CSV_COLS
-        if _missing_cols:
-            raise SystemExit(
-                f"CSV {args.csv} is missing required columns: {', '.join(sorted(_missing_cols))}"
-            )
-        for _row_num, r in enumerate(reader, start=1):
-            try:
-                row = {
-                    "listing_id": r.get("listing_id", "") or "",
-                    "variant": r["variant"],
-                    "generation": r.get("generation", ""),
-                    "price": int(r["price"]),
-                    "year": int(r["year"]),
-                    "reg": r.get("reg", ""),
-                    "reg_date": float(r.get("reg_date", 0) or 0),
-                    "age_years": float(r.get("age_years", 0) or 0),
-                    "age_months": round(float(r.get("age_years", 0) or 0) * 12, 1),
-                    "mileage": int(r["mileage"]),
-                    "new_price": int(r.get("new_price", 0) or 0),
-                    "depreciation_total": int(r.get("depreciation_total", 0) or 0),
-                    "depreciation_pa": int(r.get("depreciation_pa", 0) or 0),
-                    "location": r.get("location", ""),
-                    "is_brand_new_stock": r.get("is_brand_new_stock", "False") == "True",
-                }
-            except (ValueError, KeyError) as exc:
-                raise SystemExit(
-                    f"CSV row {_row_num}: cannot parse field - {exc}"
-                ) from exc
-
-            # Load spec option booleans dynamically from profile
-            for spec in SPEC_OPTIONS:
-                key = spec["key"]
-                row[key] = r.get(key, "False") == "True"
-
-            # Options count
-            try:
-                row["options_count"] = int(r.get("options_count", 0) or 0)
-            except ValueError as exc:
-                raise SystemExit(
-                    f"CSV row {_row_num}: cannot parse field 'options_count' - {exc}"
-                ) from exc
-
-            row["retained_pct"] = _retained_pct(row["price"], row["new_price"])
-
-            rows.append(row)
+    rows = load_csv(args.csv, SPEC_OPTIONS)
 
     print(f"Loaded {len(rows)} listings")
 
