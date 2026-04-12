@@ -656,26 +656,20 @@ def main():
 
     # ── Load profile ────────────────────────────────────────────────────
 
-    _p = load_profile(args.profile)
-    PROFILE_NAME = _p["profile_name"]
-    DISPLAY_NAME = _p["display_name"]
-    VARIANTS = _p["variants"]
-    GENERATIONS = _p["generations"]
-    SPEC_OPTIONS = _p["spec_options"]
-    SEARCH_FILTERS = _p["search_filters"]
-    DASHBOARD = _p["dashboard"]
-    REG_MAP = _p["reg_map"]
-    LID_ENCODING = _p["lid_encoding"]
-    VARIANT_BY_NAME = _p["variant_by_name"]
-    VARIANT_COLOURS = _p["variant_colours"]
-    NEW_PRICES = _p["new_prices"]
+    profile_ctx = load_profile(args.profile)
+    PROFILE_NAME = profile_ctx["profile_name"]
+    DISPLAY_NAME = profile_ctx["display_name"]
+    VARIANTS = profile_ctx["variants"]
+    GENERATIONS = profile_ctx["generations"]
+    SPEC_OPTIONS = profile_ctx["spec_options"]
+    SEARCH_FILTERS = profile_ctx["search_filters"]
+    DASHBOARD = profile_ctx["dashboard"]
+    LID_ENCODING = profile_ctx["lid_encoding"]
+    VARIANT_BY_NAME = profile_ctx["variant_by_name"]
+    VARIANT_COLOURS = profile_ctx["variant_colours"]
 
-    # Output path
-    if args.output:
-        OUTPUT_PATH = args.output
-    else:
-        csv_dir = os.path.dirname(os.path.abspath(args.csv))
-        OUTPUT_PATH = os.path.join(csv_dir, f"{PROFILE_NAME}-dashboard.html")
+    csv_dir = os.path.dirname(os.path.abspath(args.csv))
+    OUTPUT_PATH = args.output or os.path.join(csv_dir, f"{PROFILE_NAME}-dashboard.html")
 
     # Today's date
     if args.date:
@@ -690,9 +684,6 @@ def main():
 
     today_str = today.strftime("%d %B %Y")
 
-    # Decimal date for age calculations
-    TODAY_DECIMAL = today.year + (today.month - 1) / 12 + (today.day - 1) / 365.25
-
     print(f"Profile: {DISPLAY_NAME}")
     print(f"Variants: {', '.join(v['name'] for v in VARIANTS)}")
     print(f"Spec options: {', '.join(s['label'] for s in SPEC_OPTIONS)}")
@@ -704,37 +695,36 @@ def main():
 
     print(f"Loaded {len(rows)} listings")
 
-    _csv_dir = os.path.dirname(os.path.abspath(args.csv))
-    _has_listing_ids = any(r["listing_id"] for r in rows)
+    has_listing_ids = any(r["listing_id"] for r in rows)
 
     # ── Glob dated snapshot CSVs for cross-run analysis ─────────────────
     # Scans the CSV directory for sibling snapshot files named
     # {profile_name}-all-listings-YYYY-MM-DD.csv. Any file missing a
     # `listing_id` column is skipped because it cannot be cross-referenced.
 
-    SNAPSHOTS = load_snapshots(_csv_dir, PROFILE_NAME)
+    SNAPSHOTS = load_snapshots(csv_dir, PROFILE_NAME)
     print(f"Loaded {len(SNAPSHOTS)} snapshots")
 
     # ── Capture manifest (optional) ─────────────────────────────────────
     # Records what the search skill actually scraped, so "removed" listings
     # are not confused with coverage gaps.
 
-    CAPTURE_MANIFEST, CAPTURE_BADGE = load_capture_manifest(_csv_dir, PROFILE_NAME, today)
+    CAPTURE_MANIFEST, CAPTURE_BADGE = load_capture_manifest(csv_dir, PROFILE_NAME, today)
 
     # ── Watchlist ───────────────────────────────────────────────────────
-    WATCHLIST = load_watchlist(_csv_dir, PROFILE_NAME)
+    WATCHLIST = load_watchlist(csv_dir, PROFILE_NAME)
 
     # ── Listing IDs and price changes ───────────────────────────────────
 
     LISTING_IDS, PRICE_CHANGES = load_listing_state(
-        args.listing_state, _csv_dir, PROFILE_NAME, _has_listing_ids
+        args.listing_state, csv_dir, PROFILE_NAME, has_listing_ids
     )
 
     # ── Composite keys, snapshot diffing, listing tracking ─────────────
 
     SNAPSHOT_PULSE = enrich_rows(
         rows, SNAPSHOTS, WATCHLIST, LISTING_IDS, PRICE_CHANGES,
-        LID_ENCODING, today, _has_listing_ids,
+        LID_ENCODING, today, has_listing_ids,
     )
 
     # ── Rolling 28-day time series ──────────────────────────────────────
