@@ -292,6 +292,56 @@ def load_listing_state(explicit_path, csv_dir, profile_name, has_listing_ids):
 _SNAPSHOT_DATE_RE = _re.compile(r"-(\d{4}-\d{2}-\d{2})\.csv$")
 
 
+def load_capture_manifest(csv_dir, profile_name, today):
+    """Load and validate the capture manifest for today's run.
+
+    Returns (manifest, badge). manifest is None when no file exists; badge is
+    always populated with at least the 'unknown' grey default so callers can
+    hand it to the template unconditionally.
+    """
+    manifest = None
+    badge = {"status": "unknown", "colour": "grey", "label": "No capture manifest"}
+    path = os.path.join(csv_dir, f"{profile_name}-capture-{today.isoformat()}.json")
+    if not os.path.isfile(path):
+        return manifest, badge
+
+    try:
+        with open(path, "r") as cf:
+            manifest = json.load(cf)
+    except json.JSONDecodeError as exc:
+        raise SystemExit(
+            f"Capture manifest {path} is not valid JSON: {exc}"
+        ) from exc
+
+    if not isinstance(manifest, dict):
+        raise SystemExit(
+            f"Capture manifest {path} must contain a JSON object, "
+            f"got {type(manifest).__name__}"
+        )
+    sources = manifest.get("sources", [])
+    if not isinstance(sources, list):
+        raise SystemExit(
+            f"Capture manifest {path}: 'sources' must be a list, "
+            f"got {type(sources).__name__}"
+        )
+    for i, s in enumerate(sources):
+        if not isinstance(s, dict):
+            raise SystemExit(
+                f"Capture manifest {path}: 'sources[{i}]' must be an object, "
+                f"got {type(s).__name__}"
+            )
+    statuses = [s.get("status", "unknown") for s in sources]
+    if any(s == "failed" for s in statuses):
+        badge = {"status": "failed", "colour": "red", "label": "Capture: failed"}
+    elif any(s == "partial" for s in statuses):
+        badge = {"status": "partial", "colour": "amber", "label": "Capture: partial"}
+    elif statuses and all(s == "ok" for s in statuses):
+        badge = {"status": "ok", "colour": "green", "label": "Capture: complete"}
+    badge["sources"] = sources
+    print(f"Capture manifest: {badge['label']} ({len(sources)} sources)")
+    return manifest, badge
+
+
 def load_snapshots(csv_dir, profile_name):
     """Scan csv_dir for {profile_name}-all-listings-YYYY-MM-DD.csv snapshots.
 
@@ -1277,43 +1327,7 @@ def main():
     # Records what the search skill actually scraped, so "removed" listings
     # are not confused with coverage gaps.
 
-    CAPTURE_MANIFEST = None
-    CAPTURE_BADGE = {"status": "unknown", "colour": "grey", "label": "No capture manifest"}
-    _capture_path = os.path.join(_csv_dir, f"{PROFILE_NAME}-capture-{today.isoformat()}.json")
-    if os.path.isfile(_capture_path):
-        try:
-            with open(_capture_path, "r") as _cf:
-                CAPTURE_MANIFEST = json.load(_cf)
-        except json.JSONDecodeError as _exc:
-            raise SystemExit(
-                f"Capture manifest {_capture_path} is not valid JSON: {_exc}"
-            ) from _exc
-        if not isinstance(CAPTURE_MANIFEST, dict):
-            raise SystemExit(
-                f"Capture manifest {_capture_path} must contain a JSON object, "
-                f"got {type(CAPTURE_MANIFEST).__name__}"
-            )
-        _sources = CAPTURE_MANIFEST.get("sources", [])
-        if not isinstance(_sources, list):
-            raise SystemExit(
-                f"Capture manifest {_capture_path}: 'sources' must be a list, "
-                f"got {type(_sources).__name__}"
-            )
-        for _i, _s in enumerate(_sources):
-            if not isinstance(_s, dict):
-                raise SystemExit(
-                    f"Capture manifest {_capture_path}: 'sources[{_i}]' must be an object, "
-                    f"got {type(_s).__name__}"
-                )
-        _statuses = [s.get("status", "unknown") for s in _sources]
-        if any(s == "failed" for s in _statuses):
-            CAPTURE_BADGE = {"status": "failed", "colour": "red", "label": "Capture: failed"}
-        elif any(s == "partial" for s in _statuses):
-            CAPTURE_BADGE = {"status": "partial", "colour": "amber", "label": "Capture: partial"}
-        elif _statuses and all(s == "ok" for s in _statuses):
-            CAPTURE_BADGE = {"status": "ok", "colour": "green", "label": "Capture: complete"}
-        CAPTURE_BADGE["sources"] = _sources
-        print(f"Capture manifest: {CAPTURE_BADGE['label']} ({len(_sources)} sources)")
+    CAPTURE_MANIFEST, CAPTURE_BADGE = load_capture_manifest(_csv_dir, PROFILE_NAME, today)
 
     # ── Watchlist ───────────────────────────────────────────────────────
     _watchlist_path = os.path.join(_csv_dir, f"{PROFILE_NAME}-watchlist.json")
