@@ -315,361 +315,27 @@ def load_csv(path, spec_options):
     return rows
 
 
-def main():
-    # ── Argument parsing ────────────────────────────────────────────────
-
-    parser = argparse.ArgumentParser(description="Build car value dashboard from profile and CSV data")
-    parser.add_argument("--profile", required=True, help="Path to car-profile.json")
-    parser.add_argument("--csv", required=True, help="Path to CSV data file")
-    parser.add_argument("--output", default=None, help="Output HTML path (default: auto-generated)")
-    parser.add_argument("--date", default=None, help="Override today's date (YYYY-MM-DD)")
-    parser.add_argument(
-        "--listing-state",
-        default=None,
-        help="Path to a JSON file with listing_ids and price_changes dictionaries. "
-        "If omitted, auto-detects {profile_name}-listing-state.json next to the CSV.",
-    )
-    args = parser.parse_args()
-
-    # ── Load profile ────────────────────────────────────────────────────
-
-    _p = load_profile(args.profile)
-    PROFILE_NAME = _p["profile_name"]
-    DISPLAY_NAME = _p["display_name"]
-    VARIANTS = _p["variants"]
-    GENERATIONS = _p["generations"]
-    SPEC_OPTIONS = _p["spec_options"]
-    SEARCH_FILTERS = _p["search_filters"]
-    DASHBOARD = _p["dashboard"]
-    REG_MAP = _p["reg_map"]
-    LID_ENCODING = _p["lid_encoding"]
-    VARIANT_BY_NAME = _p["variant_by_name"]
-    VARIANT_COLOURS = _p["variant_colours"]
-    NEW_PRICES = _p["new_prices"]
-
-    # Output path
-    if args.output:
-        OUTPUT_PATH = args.output
-    else:
-        csv_dir = os.path.dirname(os.path.abspath(args.csv))
-        OUTPUT_PATH = os.path.join(csv_dir, f"{PROFILE_NAME}-dashboard.html")
-
-    # Today's date
-    if args.date:
-        y, m, d = map(int, args.date.split("-"))
-        today = date(y, m, d)
-    else:
-        today = date.today()
-
-    today_str = today.strftime("%d %B %Y")
-
-    # Decimal date for age calculations
-    TODAY_DECIMAL = today.year + (today.month - 1) / 12 + (today.day - 1) / 365.25
-
-    print(f"Profile: {DISPLAY_NAME}")
-    print(f"Variants: {', '.join(v['name'] for v in VARIANTS)}")
-    print(f"Spec options: {', '.join(s['label'] for s in SPEC_OPTIONS)}")
-    print(f"Date: {today_str}")
-
-    # ── Load and parse CSV ──────────────────────────────────────────────
-
-    rows = load_csv(args.csv, SPEC_OPTIONS)
-
-    print(f"Loaded {len(rows)} listings")
-
-    _csv_dir = os.path.dirname(os.path.abspath(args.csv))
-    _has_listing_ids = any(r["listing_id"] for r in rows)
-
-    # ── Glob dated snapshot CSVs for cross-run analysis ─────────────────
-    # Scans the CSV directory for sibling snapshot files named
-    # {profile_name}-all-listings-YYYY-MM-DD.csv. Any file missing a
-    # `listing_id` column is skipped because it cannot be cross-referenced.
-
-    SNAPSHOTS = []  # list of {date, rows, ids (set), median_price}
-    _snap_pattern = os.path.join(_csv_dir, f"{PROFILE_NAME}-all-listings-*.csv")
-    _date_re = _re.compile(r"-(\d{4}-\d{2}-\d{2})\.csv$")
-    for _snap_path in sorted(_glob.glob(_snap_pattern)):
-        _m = _date_re.search(_snap_path)
-        if not _m:
-            continue
-        try:
-            _ys, _ms, _ds = _m.group(1).split("-")
-            _snap_date = date(int(_ys), int(_ms), int(_ds))
-        except ValueError:
-            continue
-        with open(_snap_path, "r") as _sf:
-            _reader = csv.DictReader(_sf)
-            if _reader.fieldnames is None or "listing_id" not in _reader.fieldnames:
-                # Snapshot file has no listing_id column at all - cannot diff it.
-                continue
-            _snap_rows = list(_reader)
-        # A header-only file is still a valid empty snapshot (all listings sold).
-        _ids = {r.get("listing_id", "") for r in _snap_rows if r.get("listing_id")}
-        _prices = sorted(int(r.get("price", 0) or 0) for r in _snap_rows if r.get("price"))
-        _median = _prices[len(_prices) // 2] if _prices else 0
-        SNAPSHOTS.append({
-            "date": _snap_date,
-            "path": _snap_path,
-            "rows": _snap_rows,
-            "ids": _ids,
-            "median_price": _median,
-        })
-    print(f"Loaded {len(SNAPSHOTS)} snapshots")
-
-    # ── Capture manifest (optional) ─────────────────────────────────────
-    # Records what the search skill actually scraped, so "removed" listings
-    # are not confused with coverage gaps.
-
-    CAPTURE_MANIFEST = None
-    CAPTURE_BADGE = {"status": "unknown", "colour": "grey", "label": "No capture manifest"}
-    _capture_path = os.path.join(_csv_dir, f"{PROFILE_NAME}-capture-{today.isoformat()}.json")
-    if os.path.isfile(_capture_path):
-        try:
-            with open(_capture_path, "r") as _cf:
-                CAPTURE_MANIFEST = json.load(_cf)
-        except json.JSONDecodeError as _exc:
-            raise SystemExit(
-                f"Capture manifest {_capture_path} is not valid JSON: {_exc}"
-            ) from _exc
-        if not isinstance(CAPTURE_MANIFEST, dict):
-            raise SystemExit(
-                f"Capture manifest {_capture_path} must contain a JSON object, "
-                f"got {type(CAPTURE_MANIFEST).__name__}"
-            )
-        _sources = CAPTURE_MANIFEST.get("sources", [])
-        if not isinstance(_sources, list):
-            raise SystemExit(
-                f"Capture manifest {_capture_path}: 'sources' must be a list, "
-                f"got {type(_sources).__name__}"
-            )
-        for _i, _s in enumerate(_sources):
-            if not isinstance(_s, dict):
-                raise SystemExit(
-                    f"Capture manifest {_capture_path}: 'sources[{_i}]' must be an object, "
-                    f"got {type(_s).__name__}"
-                )
-        _statuses = [s.get("status", "unknown") for s in _sources]
-        if any(s == "failed" for s in _statuses):
-            CAPTURE_BADGE = {"status": "failed", "colour": "red", "label": "Capture: failed"}
-        elif any(s == "partial" for s in _statuses):
-            CAPTURE_BADGE = {"status": "partial", "colour": "amber", "label": "Capture: partial"}
-        elif _statuses and all(s == "ok" for s in _statuses):
-            CAPTURE_BADGE = {"status": "ok", "colour": "green", "label": "Capture: complete"}
-        CAPTURE_BADGE["sources"] = _sources
-        print(f"Capture manifest: {CAPTURE_BADGE['label']} ({len(_sources)} sources)")
-
-    # ── Watchlist ───────────────────────────────────────────────────────
-    _watchlist_path = os.path.join(_csv_dir, f"{PROFILE_NAME}-watchlist.json")
-    WATCHLIST = {"listings": {}}
-    if os.path.isfile(_watchlist_path):
-        try:
-            with open(_watchlist_path, "r") as _wf:
-                _wl_data = json.load(_wf)
-        except json.JSONDecodeError as _exc:
-            raise SystemExit(
-                f"Watchlist file {_watchlist_path} is not valid JSON: {_exc}"
-            ) from _exc
-        WATCHLIST = validate_watchlist(_wl_data, source=_watchlist_path)
-    if WATCHLIST["listings"]:
-        print(f"Loaded watchlist: {len(WATCHLIST['listings'])} starred listings")
-
-    # ── Listing IDs and price changes ───────────────────────────────────
-
-    LISTING_IDS, PRICE_CHANGES = load_listing_state(
-        args.listing_state, _csv_dir, PROFILE_NAME, _has_listing_ids
-    )
-
-    # ── Composite keys, snapshot diffing, listing tracking ─────────────
-
-    SNAPSHOT_PULSE = enrich_rows(
-        rows, SNAPSHOTS, WATCHLIST, LISTING_IDS, PRICE_CHANGES,
-        LID_ENCODING, today, _has_listing_ids,
-    )
-
-    # ── Rolling 28-day time series ──────────────────────────────────────
-    TIME_SERIES = []
-    if SNAPSHOTS:
-        TIME_SERIES = rolling_window(
-            [{"date": s["date"], "ids": s["ids"], "median_price": s["median_price"]} for s in SNAPSHOTS],
-            today,
-            days=28,
-        )
-
-    # ── Spec labels and scores ──────────────────────────────────────────
-
-    for row in rows:
-        row["spec_labels"] = _spec_labels(row, SPEC_OPTIONS)
-        row["spec_text"] = ", ".join(row["spec_labels"]) if row["spec_labels"] else "Base"
-        row["spec_score"] = _spec_score(row, SPEC_OPTIONS)
-
-    # ── Determine variant tier features ─────────────────────────────────
-    # Build a list of tier feature names for tiers > 0
-
-    tier_features = []
-    for v in VARIANTS:
-        if v["tier"] > 0:
-            tier_features.append({
-                "name": f"is_tier_{v['tier']}",
-                "tier": v["tier"],
-                "variant_name": v["name"],
-            })
-
-    print(f"Tier features: {[tf['name'] for tf in tier_features]}")
-
-    # ── Multivariate regression ─────────────────────────────────────────
-    # price = b0 + b1*age_months + b2*mileage + b3*spec_score + b4*tier_1 + b5*tier_2 + ...
-
-    coeffs, r_squared, reg_data = run_regression(rows, VARIANT_BY_NAME, tier_features)
-
-    # ── Spec premium calculation ────────────────────────────────────────
-
-    spec_premiums = []
-    for spec in SPEC_OPTIONS:
-        field = spec["key"]
-        label = spec["label"]
-        with_spec = [r["value_deviation"] for r in reg_data if r.get(field)]
-        without_spec = [r["value_deviation"] for r in reg_data if not r.get(field)]
-        if len(with_spec) >= 3 and len(without_spec) >= 3:
-            avg_with = sum(with_spec) / len(with_spec)
-            avg_without = sum(without_spec) / len(without_spec)
-            premium = round(avg_with - avg_without)
-            spec_premiums.append({
-                "label": label,
-                "premium": premium,
-                "count_with": len(with_spec),
-                "count_without": len(without_spec),
-            })
-        else:
-            spec_premiums.append({
-                "label": label,
-                "premium": 0,
-                "count_with": len(with_spec),
-                "count_without": len(without_spec),
-                "insufficient": True,
-            })
-
-    print("\nSpec Premiums:")
-    for sp in spec_premiums:
-        insuf = " (insufficient data)" if sp.get("insufficient") else ""
-        print(f"  {sp['label']}: £{sp['premium']:+,}{insuf} (n={sp['count_with']})")
-
-    # ── Depreciation curve data ─────────────────────────────────────────
-
-    dep_curve_data = {}
-    for r in rows:
-        if r["is_brand_new_stock"]:
-            continue
-        v = r["variant"]
-        if v not in dep_curve_data:
-            dep_curve_data[v] = []
-        dep_curve_data[v].append({
-            "age_months": r["age_months"],
-            "price": r["price"],
-            "location": r["location"],
-            "mileage": r["mileage"],
-        })
-
-
-    dep_curves = {}
-    for variant, points in dep_curve_data.items():
-        if len(points) < 5:
-            continue
-        poly = fit_poly2(points)
-        ages = sorted(set(p["age_months"] for p in points))
-        min_age = min(ages)
-        max_age = max(ages)
-        curve_points = []
-        step = max(1, (max_age - min_age) / 50)
-        a = min_age
-        while a <= max_age:
-            predicted = poly[0] + poly[1] * a + poly[2] * a * a
-            curve_points.append({"x": round(a, 1), "y": round(predicted)})
-            a += step
-
-        # Flattening point: where slope drops to half initial
-        flatten_month = None
-        if abs(poly[2]) > 0.001:
-            flatten_month = round(-poly[1] / (4 * poly[2]), 0)
-            if flatten_month < min_age or flatten_month > max_age:
-                flatten_month = None
-
-        dep_curves[variant] = {
-            "points": [
-                {"x": p["age_months"], "y": p["price"], "location": p["location"], "mileage": p["mileage"]}
-                for p in points
-            ],
-            "curve": curve_points,
-            "poly": poly,
-            "flatten_month": flatten_month,
-        }
-
-    for v, d in dep_curves.items():
-        fm = d["flatten_month"]
-        if fm:
-            print(f"\n{v}: poly=[{d['poly'][0]:.0f}, {d['poly'][1]:.1f}, {d['poly'][2]:.3f}], flattening ~{fm} months")
-        else:
-            print(f"\n{v}: no clear flattening point")
-
-    # ── Serialise data for JS ───────────────────────────────────────────
-
-
-    # Table data (all used cars, sorted by value_deviation ascending)
-    table_data = []
-    for r in rows:
-        if r["is_brand_new_stock"]:
-            continue
-        table_data.append({
-            "variant": r["variant"],
-            "year": r["year"],
-            "age": r["age_years"],
-            "age_months": r["age_months"],
-            "price": r["price"],
-            "mileage": r["mileage"],
-            "predicted": r["predicted_price"],
-            "deviation": r["value_deviation"],
-            "deviation_pct": r["value_deviation_pct"],
-            "retained_pct": r["retained_pct"],
-            "dep_pa": r["depreciation_pa"] if r["age_years"] >= 0.5 else None,
-            "days_on_market": r["days_on_market"],
-            "price_change": r["price_change"],
-            "spec_text": r["spec_text"],
-            "spec_labels": r["spec_labels"],
-            "location": r["location"],
-            "autotrader_url": r["autotrader_url"],
-            "composite_key": r["composite_key"],
-            "listing_id": r["listing_id"],
-            "watched": r["watched"],
-            "watch_note": r["watch_note"],
-        })
-
-
-    # Price vs mileage
-    price_mileage_data = {}
-    for r in table_data:
-        v = r["variant"]
-        if v not in price_mileage_data:
-            price_mileage_data[v] = []
-        price_mileage_data[v].append({"x": r["mileage"], "y": r["price"], "location": r["location"]})
-
-    # Fit trendline for price vs mileage
-    all_pm = [{"mileage": r["mileage"], "price": r["price"]} for r in table_data]
-    if len(all_pm) > 5:
-        pm_X = [[1, r["mileage"]] for r in all_pm]
-        pm_y = [r["price"] for r in all_pm]
-        pm_coeffs, _ = ols_regression(pm_X, pm_y)
-        mileages = sorted(set(r["mileage"] for r in all_pm))
-        pm_trend = [
-            {"x": min(mileages), "y": round(pm_coeffs[0] + pm_coeffs[1] * min(mileages))},
-            {"x": max(mileages), "y": round(pm_coeffs[0] + pm_coeffs[1] * max(mileages))},
-        ]
-    else:
-        pm_trend = []
-
-    print(f"\nTable data: {len(table_data)} used listings")
-
-    # ── Build highlight spec keys for JS ────────────────────────────────
-
-    highlight_specs = [s["label"] for s in SPEC_OPTIONS if s.get("highlight")]
+def build_html(ctx):
+    """Render the dashboard HTML from the context dict."""
+    DISPLAY_NAME = ctx["DISPLAY_NAME"]
+    DASHBOARD = ctx["DASHBOARD"]
+    VARIANTS = ctx["VARIANTS"]
+    GENERATIONS = ctx["GENERATIONS"]
+    SEARCH_FILTERS = ctx["SEARCH_FILTERS"]
+    SPEC_OPTIONS = ctx["SPEC_OPTIONS"]
+    VARIANT_COLOURS = ctx["VARIANT_COLOURS"]
+    highlight_specs = ctx["highlight_specs"]
+    table_data = ctx["table_data"]
+    dep_curves = ctx["dep_curves"]
+    spec_premiums = ctx["spec_premiums"]
+    pm_trend = ctx["pm_trend"]
+    WATCHLIST = ctx["WATCHLIST"]
+    TIME_SERIES = ctx["TIME_SERIES"]
+    SNAPSHOT_PULSE = ctx["SNAPSHOT_PULSE"]
+    CAPTURE_BADGE = ctx["CAPTURE_BADGE"]
+    r_squared = ctx["r_squared"]
+    today_str = ctx["today_str"]
+    reg_data = ctx["reg_data"]
 
     # ── Build HTML ──────────────────────────────────────────────────────
 
@@ -1446,6 +1112,388 @@ def main():
     </script>
     </body>
     </html>'''
+    return html
+
+
+def main():
+    # ── Argument parsing ────────────────────────────────────────────────
+
+    parser = argparse.ArgumentParser(description="Build car value dashboard from profile and CSV data")
+    parser.add_argument("--profile", required=True, help="Path to car-profile.json")
+    parser.add_argument("--csv", required=True, help="Path to CSV data file")
+    parser.add_argument("--output", default=None, help="Output HTML path (default: auto-generated)")
+    parser.add_argument("--date", default=None, help="Override today's date (YYYY-MM-DD)")
+    parser.add_argument(
+        "--listing-state",
+        default=None,
+        help="Path to a JSON file with listing_ids and price_changes dictionaries. "
+        "If omitted, auto-detects {profile_name}-listing-state.json next to the CSV.",
+    )
+    args = parser.parse_args()
+
+    # ── Load profile ────────────────────────────────────────────────────
+
+    _p = load_profile(args.profile)
+    PROFILE_NAME = _p["profile_name"]
+    DISPLAY_NAME = _p["display_name"]
+    VARIANTS = _p["variants"]
+    GENERATIONS = _p["generations"]
+    SPEC_OPTIONS = _p["spec_options"]
+    SEARCH_FILTERS = _p["search_filters"]
+    DASHBOARD = _p["dashboard"]
+    REG_MAP = _p["reg_map"]
+    LID_ENCODING = _p["lid_encoding"]
+    VARIANT_BY_NAME = _p["variant_by_name"]
+    VARIANT_COLOURS = _p["variant_colours"]
+    NEW_PRICES = _p["new_prices"]
+
+    # Output path
+    if args.output:
+        OUTPUT_PATH = args.output
+    else:
+        csv_dir = os.path.dirname(os.path.abspath(args.csv))
+        OUTPUT_PATH = os.path.join(csv_dir, f"{PROFILE_NAME}-dashboard.html")
+
+    # Today's date
+    if args.date:
+        y, m, d = map(int, args.date.split("-"))
+        today = date(y, m, d)
+    else:
+        today = date.today()
+
+    today_str = today.strftime("%d %B %Y")
+
+    # Decimal date for age calculations
+    TODAY_DECIMAL = today.year + (today.month - 1) / 12 + (today.day - 1) / 365.25
+
+    print(f"Profile: {DISPLAY_NAME}")
+    print(f"Variants: {', '.join(v['name'] for v in VARIANTS)}")
+    print(f"Spec options: {', '.join(s['label'] for s in SPEC_OPTIONS)}")
+    print(f"Date: {today_str}")
+
+    # ── Load and parse CSV ──────────────────────────────────────────────
+
+    rows = load_csv(args.csv, SPEC_OPTIONS)
+
+    print(f"Loaded {len(rows)} listings")
+
+    _csv_dir = os.path.dirname(os.path.abspath(args.csv))
+    _has_listing_ids = any(r["listing_id"] for r in rows)
+
+    # ── Glob dated snapshot CSVs for cross-run analysis ─────────────────
+    # Scans the CSV directory for sibling snapshot files named
+    # {profile_name}-all-listings-YYYY-MM-DD.csv. Any file missing a
+    # `listing_id` column is skipped because it cannot be cross-referenced.
+
+    SNAPSHOTS = []  # list of {date, rows, ids (set), median_price}
+    _snap_pattern = os.path.join(_csv_dir, f"{PROFILE_NAME}-all-listings-*.csv")
+    _date_re = _re.compile(r"-(\d{4}-\d{2}-\d{2})\.csv$")
+    for _snap_path in sorted(_glob.glob(_snap_pattern)):
+        _m = _date_re.search(_snap_path)
+        if not _m:
+            continue
+        try:
+            _ys, _ms, _ds = _m.group(1).split("-")
+            _snap_date = date(int(_ys), int(_ms), int(_ds))
+        except ValueError:
+            continue
+        with open(_snap_path, "r") as _sf:
+            _reader = csv.DictReader(_sf)
+            if _reader.fieldnames is None or "listing_id" not in _reader.fieldnames:
+                # Snapshot file has no listing_id column at all - cannot diff it.
+                continue
+            _snap_rows = list(_reader)
+        # A header-only file is still a valid empty snapshot (all listings sold).
+        _ids = {r.get("listing_id", "") for r in _snap_rows if r.get("listing_id")}
+        _prices = sorted(int(r.get("price", 0) or 0) for r in _snap_rows if r.get("price"))
+        _median = _prices[len(_prices) // 2] if _prices else 0
+        SNAPSHOTS.append({
+            "date": _snap_date,
+            "path": _snap_path,
+            "rows": _snap_rows,
+            "ids": _ids,
+            "median_price": _median,
+        })
+    print(f"Loaded {len(SNAPSHOTS)} snapshots")
+
+    # ── Capture manifest (optional) ─────────────────────────────────────
+    # Records what the search skill actually scraped, so "removed" listings
+    # are not confused with coverage gaps.
+
+    CAPTURE_MANIFEST = None
+    CAPTURE_BADGE = {"status": "unknown", "colour": "grey", "label": "No capture manifest"}
+    _capture_path = os.path.join(_csv_dir, f"{PROFILE_NAME}-capture-{today.isoformat()}.json")
+    if os.path.isfile(_capture_path):
+        try:
+            with open(_capture_path, "r") as _cf:
+                CAPTURE_MANIFEST = json.load(_cf)
+        except json.JSONDecodeError as _exc:
+            raise SystemExit(
+                f"Capture manifest {_capture_path} is not valid JSON: {_exc}"
+            ) from _exc
+        if not isinstance(CAPTURE_MANIFEST, dict):
+            raise SystemExit(
+                f"Capture manifest {_capture_path} must contain a JSON object, "
+                f"got {type(CAPTURE_MANIFEST).__name__}"
+            )
+        _sources = CAPTURE_MANIFEST.get("sources", [])
+        if not isinstance(_sources, list):
+            raise SystemExit(
+                f"Capture manifest {_capture_path}: 'sources' must be a list, "
+                f"got {type(_sources).__name__}"
+            )
+        for _i, _s in enumerate(_sources):
+            if not isinstance(_s, dict):
+                raise SystemExit(
+                    f"Capture manifest {_capture_path}: 'sources[{_i}]' must be an object, "
+                    f"got {type(_s).__name__}"
+                )
+        _statuses = [s.get("status", "unknown") for s in _sources]
+        if any(s == "failed" for s in _statuses):
+            CAPTURE_BADGE = {"status": "failed", "colour": "red", "label": "Capture: failed"}
+        elif any(s == "partial" for s in _statuses):
+            CAPTURE_BADGE = {"status": "partial", "colour": "amber", "label": "Capture: partial"}
+        elif _statuses and all(s == "ok" for s in _statuses):
+            CAPTURE_BADGE = {"status": "ok", "colour": "green", "label": "Capture: complete"}
+        CAPTURE_BADGE["sources"] = _sources
+        print(f"Capture manifest: {CAPTURE_BADGE['label']} ({len(_sources)} sources)")
+
+    # ── Watchlist ───────────────────────────────────────────────────────
+    _watchlist_path = os.path.join(_csv_dir, f"{PROFILE_NAME}-watchlist.json")
+    WATCHLIST = {"listings": {}}
+    if os.path.isfile(_watchlist_path):
+        try:
+            with open(_watchlist_path, "r") as _wf:
+                _wl_data = json.load(_wf)
+        except json.JSONDecodeError as _exc:
+            raise SystemExit(
+                f"Watchlist file {_watchlist_path} is not valid JSON: {_exc}"
+            ) from _exc
+        WATCHLIST = validate_watchlist(_wl_data, source=_watchlist_path)
+    if WATCHLIST["listings"]:
+        print(f"Loaded watchlist: {len(WATCHLIST['listings'])} starred listings")
+
+    # ── Listing IDs and price changes ───────────────────────────────────
+
+    LISTING_IDS, PRICE_CHANGES = load_listing_state(
+        args.listing_state, _csv_dir, PROFILE_NAME, _has_listing_ids
+    )
+
+    # ── Composite keys, snapshot diffing, listing tracking ─────────────
+
+    SNAPSHOT_PULSE = enrich_rows(
+        rows, SNAPSHOTS, WATCHLIST, LISTING_IDS, PRICE_CHANGES,
+        LID_ENCODING, today, _has_listing_ids,
+    )
+
+    # ── Rolling 28-day time series ──────────────────────────────────────
+    TIME_SERIES = []
+    if SNAPSHOTS:
+        TIME_SERIES = rolling_window(
+            [{"date": s["date"], "ids": s["ids"], "median_price": s["median_price"]} for s in SNAPSHOTS],
+            today,
+            days=28,
+        )
+
+    # ── Spec labels and scores ──────────────────────────────────────────
+
+    for row in rows:
+        row["spec_labels"] = _spec_labels(row, SPEC_OPTIONS)
+        row["spec_text"] = ", ".join(row["spec_labels"]) if row["spec_labels"] else "Base"
+        row["spec_score"] = _spec_score(row, SPEC_OPTIONS)
+
+    # ── Determine variant tier features ─────────────────────────────────
+    # Build a list of tier feature names for tiers > 0
+
+    tier_features = []
+    for v in VARIANTS:
+        if v["tier"] > 0:
+            tier_features.append({
+                "name": f"is_tier_{v['tier']}",
+                "tier": v["tier"],
+                "variant_name": v["name"],
+            })
+
+    print(f"Tier features: {[tf['name'] for tf in tier_features]}")
+
+    # ── Multivariate regression ─────────────────────────────────────────
+    # price = b0 + b1*age_months + b2*mileage + b3*spec_score + b4*tier_1 + b5*tier_2 + ...
+
+    coeffs, r_squared, reg_data = run_regression(rows, VARIANT_BY_NAME, tier_features)
+
+    # ── Spec premium calculation ────────────────────────────────────────
+
+    spec_premiums = []
+    for spec in SPEC_OPTIONS:
+        field = spec["key"]
+        label = spec["label"]
+        with_spec = [r["value_deviation"] for r in reg_data if r.get(field)]
+        without_spec = [r["value_deviation"] for r in reg_data if not r.get(field)]
+        if len(with_spec) >= 3 and len(without_spec) >= 3:
+            avg_with = sum(with_spec) / len(with_spec)
+            avg_without = sum(without_spec) / len(without_spec)
+            premium = round(avg_with - avg_without)
+            spec_premiums.append({
+                "label": label,
+                "premium": premium,
+                "count_with": len(with_spec),
+                "count_without": len(without_spec),
+            })
+        else:
+            spec_premiums.append({
+                "label": label,
+                "premium": 0,
+                "count_with": len(with_spec),
+                "count_without": len(without_spec),
+                "insufficient": True,
+            })
+
+    print("\nSpec Premiums:")
+    for sp in spec_premiums:
+        insuf = " (insufficient data)" if sp.get("insufficient") else ""
+        print(f"  {sp['label']}: £{sp['premium']:+,}{insuf} (n={sp['count_with']})")
+
+    # ── Depreciation curve data ─────────────────────────────────────────
+
+    dep_curve_data = {}
+    for r in rows:
+        if r["is_brand_new_stock"]:
+            continue
+        v = r["variant"]
+        if v not in dep_curve_data:
+            dep_curve_data[v] = []
+        dep_curve_data[v].append({
+            "age_months": r["age_months"],
+            "price": r["price"],
+            "location": r["location"],
+            "mileage": r["mileage"],
+        })
+
+
+    dep_curves = {}
+    for variant, points in dep_curve_data.items():
+        if len(points) < 5:
+            continue
+        poly = fit_poly2(points)
+        ages = sorted(set(p["age_months"] for p in points))
+        min_age = min(ages)
+        max_age = max(ages)
+        curve_points = []
+        step = max(1, (max_age - min_age) / 50)
+        a = min_age
+        while a <= max_age:
+            predicted = poly[0] + poly[1] * a + poly[2] * a * a
+            curve_points.append({"x": round(a, 1), "y": round(predicted)})
+            a += step
+
+        # Flattening point: where slope drops to half initial
+        flatten_month = None
+        if abs(poly[2]) > 0.001:
+            flatten_month = round(-poly[1] / (4 * poly[2]), 0)
+            if flatten_month < min_age or flatten_month > max_age:
+                flatten_month = None
+
+        dep_curves[variant] = {
+            "points": [
+                {"x": p["age_months"], "y": p["price"], "location": p["location"], "mileage": p["mileage"]}
+                for p in points
+            ],
+            "curve": curve_points,
+            "poly": poly,
+            "flatten_month": flatten_month,
+        }
+
+    for v, d in dep_curves.items():
+        fm = d["flatten_month"]
+        if fm:
+            print(f"\n{v}: poly=[{d['poly'][0]:.0f}, {d['poly'][1]:.1f}, {d['poly'][2]:.3f}], flattening ~{fm} months")
+        else:
+            print(f"\n{v}: no clear flattening point")
+
+    # ── Serialise data for JS ───────────────────────────────────────────
+
+
+    # Table data (all used cars, sorted by value_deviation ascending)
+    table_data = []
+    for r in rows:
+        if r["is_brand_new_stock"]:
+            continue
+        table_data.append({
+            "variant": r["variant"],
+            "year": r["year"],
+            "age": r["age_years"],
+            "age_months": r["age_months"],
+            "price": r["price"],
+            "mileage": r["mileage"],
+            "predicted": r["predicted_price"],
+            "deviation": r["value_deviation"],
+            "deviation_pct": r["value_deviation_pct"],
+            "retained_pct": r["retained_pct"],
+            "dep_pa": r["depreciation_pa"] if r["age_years"] >= 0.5 else None,
+            "days_on_market": r["days_on_market"],
+            "price_change": r["price_change"],
+            "spec_text": r["spec_text"],
+            "spec_labels": r["spec_labels"],
+            "location": r["location"],
+            "autotrader_url": r["autotrader_url"],
+            "composite_key": r["composite_key"],
+            "listing_id": r["listing_id"],
+            "watched": r["watched"],
+            "watch_note": r["watch_note"],
+        })
+
+
+    # Price vs mileage
+    price_mileage_data = {}
+    for r in table_data:
+        v = r["variant"]
+        if v not in price_mileage_data:
+            price_mileage_data[v] = []
+        price_mileage_data[v].append({"x": r["mileage"], "y": r["price"], "location": r["location"]})
+
+    # Fit trendline for price vs mileage
+    all_pm = [{"mileage": r["mileage"], "price": r["price"]} for r in table_data]
+    if len(all_pm) > 5:
+        pm_X = [[1, r["mileage"]] for r in all_pm]
+        pm_y = [r["price"] for r in all_pm]
+        pm_coeffs, _ = ols_regression(pm_X, pm_y)
+        mileages = sorted(set(r["mileage"] for r in all_pm))
+        pm_trend = [
+            {"x": min(mileages), "y": round(pm_coeffs[0] + pm_coeffs[1] * min(mileages))},
+            {"x": max(mileages), "y": round(pm_coeffs[0] + pm_coeffs[1] * max(mileages))},
+        ]
+    else:
+        pm_trend = []
+
+    print(f"\nTable data: {len(table_data)} used listings")
+
+    # ── Build highlight spec keys for JS ────────────────────────────────
+
+    highlight_specs = [s["label"] for s in SPEC_OPTIONS if s.get("highlight")]
+
+    # ── Build HTML ──────────────────────────────────────────────────────
+
+    html = build_html({
+        "DISPLAY_NAME": DISPLAY_NAME,
+        "DASHBOARD": DASHBOARD,
+        "VARIANTS": VARIANTS,
+        "GENERATIONS": GENERATIONS,
+        "SEARCH_FILTERS": SEARCH_FILTERS,
+        "SPEC_OPTIONS": SPEC_OPTIONS,
+        "VARIANT_COLOURS": VARIANT_COLOURS,
+        "highlight_specs": highlight_specs,
+        "table_data": table_data,
+        "dep_curves": dep_curves,
+        "spec_premiums": spec_premiums,
+        "pm_trend": pm_trend,
+        "WATCHLIST": WATCHLIST,
+        "TIME_SERIES": TIME_SERIES,
+        "SNAPSHOT_PULSE": SNAPSHOT_PULSE,
+        "CAPTURE_BADGE": CAPTURE_BADGE,
+        "r_squared": r_squared,
+        "today_str": today_str,
+        "reg_data": reg_data,
+    })
 
     with open(OUTPUT_PATH, 'w') as f:
         f.write(html)
