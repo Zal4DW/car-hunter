@@ -9,6 +9,7 @@ venv/
 .coverage_cache/
 coverage.xml
 htmlcov/
+*.egg-info/
 .mypy_cache/
 .ruff_cache/
 
