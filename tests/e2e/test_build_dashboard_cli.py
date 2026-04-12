@@ -305,6 +305,36 @@ class TestBuilderFailsHelpfully:
         assert "row 2" in combined.lower() or "row 2" in combined
         assert "TBC" in combined
 
+    def test_bad_date_argument(
+        self,
+        tmp_path: Path,
+        builder_script: Path,
+        fixture_profile_path: Path,
+        fixture_csv_path: Path,
+        subprocess_env: dict,
+    ):
+        """Invalid --date gives a clear error, not a raw ValueError traceback."""
+        result = subprocess.run(
+            [
+                sys.executable,
+                str(builder_script),
+                "--profile",
+                str(fixture_profile_path),
+                "--csv",
+                str(fixture_csv_path),
+                "--date",
+                "yesterday",
+            ],
+            capture_output=True,
+            text=True,
+            env=subprocess_env,
+            timeout=BUILDER_TIMEOUT_SECONDS,
+        )
+        assert result.returncode != 0
+        combined = result.stderr + result.stdout
+        assert "Traceback" not in combined
+        assert "--date" in combined or "YYYY-MM-DD" in combined
+
     def test_malformed_listing_state_json(
         self,
         tmp_path: Path,

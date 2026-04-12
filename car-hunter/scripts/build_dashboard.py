@@ -1171,8 +1171,12 @@ def main():
 
     # Today's date
     if args.date:
-        y, m, d = map(int, args.date.split("-"))
-        today = date(y, m, d)
+        try:
+            today = date.fromisoformat(args.date)
+        except ValueError as exc:
+            raise SystemExit(
+                f"--date must be YYYY-MM-DD (got {args.date!r}): {exc}"
+            ) from exc
     else:
         today = date.today()
 
