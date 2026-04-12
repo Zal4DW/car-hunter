@@ -273,7 +273,14 @@ def load_listing_state(explicit_path, csv_dir, profile_name, has_listing_ids):
 def load_csv(path, spec_options):
     """Load and validate listings from a CSV file, returning a list of row dicts."""
     rows = []
-    with open(path, "r") as f:
+    try:
+        f = open(path, "r")
+    except FileNotFoundError as exc:
+        raise SystemExit(
+            f"CSV file not found: {path}. "
+            f"Check the path or run /search-cars to generate one."
+        ) from exc
+    with f:
         reader = csv.DictReader(f)
         _REQUIRED_CSV_COLS = {"variant", "price", "year", "mileage"}
         if reader.fieldnames:

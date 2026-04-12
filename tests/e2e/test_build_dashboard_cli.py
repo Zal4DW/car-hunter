@@ -183,7 +183,7 @@ class TestBuilderFailsHelpfully:
         fixture_profile_path: Path,
         subprocess_env: dict,
     ):
-        """Missing csv returns nonzero."""
+        """Missing csv returns nonzero with a helpful message, not a raw traceback."""
         result = subprocess.run(
             [
                 sys.executable,
@@ -199,6 +199,9 @@ class TestBuilderFailsHelpfully:
             timeout=BUILDER_TIMEOUT_SECONDS,
         )
         assert result.returncode != 0
+        combined = result.stderr + result.stdout
+        assert "Traceback" not in combined
+        assert "not found" in combined.lower() or "no such file" in combined.lower()
 
     def test_profile_missing_required_key(
         self,
