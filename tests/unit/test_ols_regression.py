@@ -70,6 +70,12 @@ class TestEdgeCases:
         assert coeffs[1] == pytest.approx(0.0, abs=1e-9)
         assert r2 == 0
 
+    def test_empty_input_returns_zero_coefficients(self):
+        """Empty X and y returns empty coefficients and zero R-squared."""
+        coeffs, r2 = ols_regression([], [])
+        assert coeffs == []
+        assert r2 == 0
+
     def test_collinear_column_does_not_crash(self):
         """Collinear column does not crash."""
         # x2 = 2*x1 - perfectly collinear

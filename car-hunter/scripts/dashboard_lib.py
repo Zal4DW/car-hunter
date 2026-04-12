@@ -47,6 +47,8 @@ def ols_regression(X, y):
     zero rather than raising.
     """
     n = len(y)
+    if n == 0 or not X:
+        return [], 0
     k = len(X[0])
 
     XtX = [[0.0] * k for _ in range(k)]
