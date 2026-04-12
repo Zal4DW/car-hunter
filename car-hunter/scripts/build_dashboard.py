@@ -129,10 +129,15 @@ def run_regression(rows, variant_by_name, tier_features):
         features = row_to_features(r, variant_by_name, tier_features)
         predicted = sum(f * c for f, c in zip(features, coeffs))
         r["predicted_price"] = round(predicted)
-        r["value_deviation"] = round(r["price"] - predicted)
-        r["value_deviation_pct"] = (
-            round((r["price"] - predicted) / predicted * 100, 1) if predicted > 0 else 0
-        )
+        if predicted > 0:
+            r["value_deviation"] = round(r["price"] - predicted)
+            r["value_deviation_pct"] = round((r["price"] - predicted) / predicted * 100, 1)
+        else:
+            # Model produced a zero or negative prediction - unreliable. Don't
+            # emit an absolute deviation that would render as "overpriced by
+            # £X (0%)" on the dashboard.
+            r["value_deviation"] = 0
+            r["value_deviation_pct"] = 0
 
     return coeffs, r_squared, reg_data
 
