@@ -289,6 +289,48 @@ def load_listing_state(explicit_path, csv_dir, profile_name, has_listing_ids):
     return lids, prices
 
 
+_SNAPSHOT_DATE_RE = _re.compile(r"-(\d{4}-\d{2}-\d{2})\.csv$")
+
+
+def load_snapshots(csv_dir, profile_name):
+    """Scan csv_dir for {profile_name}-all-listings-YYYY-MM-DD.csv snapshots.
+
+    Returns a list of {date, path, rows, ids, median_price} dicts. Files with
+    missing/invalid date tags or no listing_id column emit a WARNING to stdout
+    and are excluded from the result.
+    """
+    snapshots = []
+    pattern = os.path.join(csv_dir, f"{profile_name}-all-listings-*.csv")
+    for path in sorted(_glob.glob(pattern)):
+        match = _SNAPSHOT_DATE_RE.search(path)
+        if not match:
+            print(f"WARNING: skipping snapshot {path}: filename has no date tag")
+            continue
+        try:
+            ys, ms, ds = match.group(1).split("-")
+            snap_date = date(int(ys), int(ms), int(ds))
+        except ValueError as exc:
+            print(f"WARNING: skipping snapshot {path}: invalid date in filename ({exc})")
+            continue
+        with open(path, "r") as sf:
+            reader = csv.DictReader(sf)
+            if reader.fieldnames is None or "listing_id" not in reader.fieldnames:
+                print(f"WARNING: skipping snapshot {path}: no listing_id column, cannot cross-reference")
+                continue
+            snap_rows = list(reader)
+        ids = {r.get("listing_id", "") for r in snap_rows if r.get("listing_id")}
+        prices = sorted(int(r.get("price", 0) or 0) for r in snap_rows if r.get("price"))
+        median = prices[len(prices) // 2] if prices else 0
+        snapshots.append({
+            "date": snap_date,
+            "path": path,
+            "rows": snap_rows,
+            "ids": ids,
+            "median_price": median,
+        })
+    return snapshots
+
+
 def load_csv(path, spec_options):
     """Load and validate listings from a CSV file, returning a list of row dicts."""
     rows = []
@@ -1228,37 +1270,7 @@ def main():
     # {profile_name}-all-listings-YYYY-MM-DD.csv. Any file missing a
     # `listing_id` column is skipped because it cannot be cross-referenced.
 
-    SNAPSHOTS = []  # list of {date, rows, ids (set), median_price}
-    _snap_pattern = os.path.join(_csv_dir, f"{PROFILE_NAME}-all-listings-*.csv")
-    _date_re = _re.compile(r"-(\d{4}-\d{2}-\d{2})\.csv$")
-    for _snap_path in sorted(_glob.glob(_snap_pattern)):
-        _m = _date_re.search(_snap_path)
-        if not _m:
-            print(f"WARNING: skipping snapshot {_snap_path}: filename has no date tag")
-            continue
-        try:
-            _ys, _ms, _ds = _m.group(1).split("-")
-            _snap_date = date(int(_ys), int(_ms), int(_ds))
-        except ValueError as _exc:
-            print(f"WARNING: skipping snapshot {_snap_path}: invalid date in filename ({_exc})")
-            continue
-        with open(_snap_path, "r") as _sf:
-            _reader = csv.DictReader(_sf)
-            if _reader.fieldnames is None or "listing_id" not in _reader.fieldnames:
-                print(f"WARNING: skipping snapshot {_snap_path}: no listing_id column, cannot cross-reference")
-                continue
-            _snap_rows = list(_reader)
-        # A header-only file is still a valid empty snapshot (all listings sold).
-        _ids = {r.get("listing_id", "") for r in _snap_rows if r.get("listing_id")}
-        _prices = sorted(int(r.get("price", 0) or 0) for r in _snap_rows if r.get("price"))
-        _median = _prices[len(_prices) // 2] if _prices else 0
-        SNAPSHOTS.append({
-            "date": _snap_date,
-            "path": _snap_path,
-            "rows": _snap_rows,
-            "ids": _ids,
-            "median_price": _median,
-        })
+    SNAPSHOTS = load_snapshots(_csv_dir, PROFILE_NAME)
     print(f"Loaded {len(SNAPSHOTS)} snapshots")
 
     # ── Capture manifest (optional) ─────────────────────────────────────
