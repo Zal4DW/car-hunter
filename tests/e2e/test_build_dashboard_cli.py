@@ -270,6 +270,37 @@ class TestBuilderFailsHelpfully:
         assert "row 2" in combined.lower() or "row 2" in combined
         assert "TBC" in combined
 
+    def test_malformed_listing_state_json(
+        self,
+        tmp_path: Path,
+        builder_script: Path,
+        fixture_profile_path: Path,
+        fixture_csv_path: Path,
+        subprocess_env: dict,
+    ):
+        """Corrupt listing-state JSON gives a clear error, not a raw traceback."""
+        bad_state = tmp_path / "bad-state.json"
+        bad_state.write_text("{not json")
+        result = subprocess.run(
+            [
+                sys.executable,
+                str(builder_script),
+                "--profile",
+                str(fixture_profile_path),
+                "--csv",
+                str(fixture_csv_path),
+                "--listing-state",
+                str(bad_state),
+            ],
+            capture_output=True,
+            text=True,
+            env=subprocess_env,
+            timeout=BUILDER_TIMEOUT_SECONDS,
+        )
+        assert result.returncode != 0
+        combined = result.stderr + result.stdout
+        assert "listing state" in combined.lower() or "invalid json" in combined.lower()
+
 
 class TestBuilderEdgeCases:
     """Cover conditional branches the main happy path doesn't exercise.

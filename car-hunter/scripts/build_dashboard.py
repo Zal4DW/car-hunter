@@ -298,8 +298,13 @@ elif not _has_listing_ids:
         _state_path = _auto
 
 if _state_path:
-    with open(_state_path, "r") as f:
-        _state = json.load(f)
+    try:
+        with open(_state_path, "r") as f:
+            _state = json.load(f)
+    except json.JSONDecodeError as _exc:
+        raise SystemExit(
+            f"Listing state file {_state_path} is not valid JSON: {_exc}"
+        ) from _exc
 
     # Fail loudly on malformed sidecars. Silent fallback to empty dicts
     # would hide typos in the file and leave the user wondering why
