@@ -286,6 +286,36 @@ def validate_watchlist(data, source="watchlist"):
     return {"listings": listings}
 
 
+def compute_spec_premiums(reg_rows, spec_options):
+    """For each spec option, compute the average value-deviation delta
+    between rows with the spec present vs absent.
+
+    Each entry in the result is a dict with `label`, `premium`, `count_with`
+    and `count_without`. Entries with fewer than 3 rows on either side gain
+    an `insufficient: True` flag and a zero premium.
+    """
+    premiums = []
+    for spec in spec_options:
+        field = spec["key"]
+        label = spec["label"]
+        with_spec = [r["value_deviation"] for r in reg_rows if r.get(field)]
+        without_spec = [r["value_deviation"] for r in reg_rows if not r.get(field)]
+        entry = {
+            "label": label,
+            "count_with": len(with_spec),
+            "count_without": len(without_spec),
+        }
+        if len(with_spec) >= 3 and len(without_spec) >= 3:
+            avg_with = sum(with_spec) / len(with_spec)
+            avg_without = sum(without_spec) / len(without_spec)
+            entry["premium"] = round(avg_with - avg_without)
+        else:
+            entry["premium"] = 0
+            entry["insufficient"] = True
+        premiums.append(entry)
+    return premiums
+
+
 def row_to_features(row, variant_by_name, tier_features):
     """Convert a row dict into the regression feature vector.
 

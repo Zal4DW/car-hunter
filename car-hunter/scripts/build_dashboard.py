@@ -34,6 +34,7 @@ from dashboard_lib import (  # noqa: E402
     get_tier_value as _get_tier_value,
     retained_pct as _retained_pct,
     build_feature_matrix,
+    compute_spec_premiums,
     row_to_features,
     extract_listing_id,
     snapshot_diff,
@@ -1405,30 +1406,7 @@ def main():
 
     # ── Spec premium calculation ────────────────────────────────────────
 
-    spec_premiums = []
-    for spec in SPEC_OPTIONS:
-        field = spec["key"]
-        label = spec["label"]
-        with_spec = [r["value_deviation"] for r in reg_data if r.get(field)]
-        without_spec = [r["value_deviation"] for r in reg_data if not r.get(field)]
-        if len(with_spec) >= 3 and len(without_spec) >= 3:
-            avg_with = sum(with_spec) / len(with_spec)
-            avg_without = sum(without_spec) / len(without_spec)
-            premium = round(avg_with - avg_without)
-            spec_premiums.append({
-                "label": label,
-                "premium": premium,
-                "count_with": len(with_spec),
-                "count_without": len(without_spec),
-            })
-        else:
-            spec_premiums.append({
-                "label": label,
-                "premium": 0,
-                "count_with": len(with_spec),
-                "count_without": len(without_spec),
-                "insufficient": True,
-            })
+    spec_premiums = compute_spec_premiums(reg_data, SPEC_OPTIONS)
 
     print("\nSpec Premiums:")
     for sp in spec_premiums:
