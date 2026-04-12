@@ -292,6 +292,29 @@ def load_listing_state(explicit_path, csv_dir, profile_name, has_listing_ids):
 _SNAPSHOT_DATE_RE = _re.compile(r"-(\d{4}-\d{2}-\d{2})\.csv$")
 
 
+def load_watchlist(csv_dir, profile_name):
+    """Load the {profile_name}-watchlist.json sidecar if present.
+
+    Returns a dict shaped {"listings": {...}}. Missing file yields an empty
+    watchlist. Malformed JSON or shape raises SystemExit with a clear message.
+    """
+    path = os.path.join(csv_dir, f"{profile_name}-watchlist.json")
+    if not os.path.isfile(path):
+        return {"listings": {}}
+
+    try:
+        with open(path, "r") as wf:
+            data = json.load(wf)
+    except json.JSONDecodeError as exc:
+        raise SystemExit(
+            f"Watchlist file {path} is not valid JSON: {exc}"
+        ) from exc
+    watchlist = validate_watchlist(data, source=path)
+    if watchlist["listings"]:
+        print(f"Loaded watchlist: {len(watchlist['listings'])} starred listings")
+    return watchlist
+
+
 def load_capture_manifest(csv_dir, profile_name, today):
     """Load and validate the capture manifest for today's run.
 
@@ -1330,19 +1353,7 @@ def main():
     CAPTURE_MANIFEST, CAPTURE_BADGE = load_capture_manifest(_csv_dir, PROFILE_NAME, today)
 
     # ── Watchlist ───────────────────────────────────────────────────────
-    _watchlist_path = os.path.join(_csv_dir, f"{PROFILE_NAME}-watchlist.json")
-    WATCHLIST = {"listings": {}}
-    if os.path.isfile(_watchlist_path):
-        try:
-            with open(_watchlist_path, "r") as _wf:
-                _wl_data = json.load(_wf)
-        except json.JSONDecodeError as _exc:
-            raise SystemExit(
-                f"Watchlist file {_watchlist_path} is not valid JSON: {_exc}"
-            ) from _exc
-        WATCHLIST = validate_watchlist(_wl_data, source=_watchlist_path)
-    if WATCHLIST["listings"]:
-        print(f"Loaded watchlist: {len(WATCHLIST['listings'])} starred listings")
+    WATCHLIST = load_watchlist(_csv_dir, PROFILE_NAME)
 
     # ── Listing IDs and price changes ───────────────────────────────────
 
