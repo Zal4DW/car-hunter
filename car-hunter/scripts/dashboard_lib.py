@@ -96,6 +96,8 @@ def fit_poly2(points):
 
     Returns the three polynomial coefficients [a, b, c].
     """
+    if not points:
+        return [0.0, 0.0, 0.0]
     X = [[1, p["age_months"], p["age_months"] ** 2] for p in points]
     y = [p["price"] for p in points]
     coeffs, _ = ols_regression(X, y)

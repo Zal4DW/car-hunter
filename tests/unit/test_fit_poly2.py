@@ -10,6 +10,13 @@ def _points(pairs):
     return [{"age_months": am, "price": p} for am, p in pairs]
 
 
+class TestPoly2EdgeCases:
+    """Edge cases for fit_poly2."""
+    def test_empty_points_returns_zero_poly(self):
+        """Empty input returns three zero coefficients."""
+        assert fit_poly2([]) == [0.0, 0.0, 0.0]
+
+
 class TestPoly2Fit:
     """Poly2 fit test cases."""
     def test_recovers_quadratic_coefficients(self):
