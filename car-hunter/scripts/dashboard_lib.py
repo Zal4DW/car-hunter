@@ -42,13 +42,15 @@ def ols_regression(X, y):
     """Ordinary least squares via normal equations with Gaussian elimination.
 
     Solves b = (X'X)^-1 X'y without any external libraries.
-    Returns (coefficients, r_squared). Uses partial pivoting for numerical
-    stability. Coefficients for singular/collinear columns are returned as
-    zero rather than raising.
+    Returns (coefficients, r_squared, singular_columns) where singular_columns
+    is a list of column indices whose pivot was numerically zero and whose
+    coefficients were therefore left at zero rather than solved for. Callers
+    should surface a warning when this list is non-empty so users know a
+    feature was effectively dropped from the model.
     """
     n = len(y)
     if n == 0 or not X:
-        return [], 0
+        return [], 0, []
     k = len(X[0])
 
     XtX = [[0.0] * k for _ in range(k)]
@@ -63,11 +65,13 @@ def ols_regression(X, y):
             Xty[j] += X[i][j] * y[i]
 
     aug = [XtX[i][:] + [Xty[i]] for i in range(k)]
+    singular_columns = []
     for col in range(k):
         max_row = max(range(col, k), key=lambda r: abs(aug[r][col]))
         aug[col], aug[max_row] = aug[max_row], aug[col]
         pivot = aug[col][col]
         if abs(pivot) < 1e-12:
+            singular_columns.append(col)
             continue
         for j in range(col, k + 1):
             aug[col][j] /= pivot
@@ -88,7 +92,7 @@ def ols_regression(X, y):
     )
     r_squared = 1 - ss_res / ss_tot if ss_tot > 0 else 0
 
-    return coeffs, r_squared
+    return coeffs, r_squared, singular_columns
 
 
 def fit_poly2(points):
@@ -100,7 +104,7 @@ def fit_poly2(points):
         return [0.0, 0.0, 0.0]
     X = [[1, p["age_months"], p["age_months"] ** 2] for p in points]
     y = [p["price"] for p in points]
-    coeffs, _ = ols_regression(X, y)
+    coeffs, _, _ = ols_regression(X, y)
     return coeffs
 
 

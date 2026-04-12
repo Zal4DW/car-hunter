@@ -116,10 +116,13 @@ def run_regression(rows, variant_by_name, tier_features):
     X, y = build_feature_matrix(reg_data, variant_by_name, tier_features)
 
     if len(X) >= len(feature_names):
-        coeffs, r_squared = ols_regression(X, y)
+        coeffs, r_squared, singular_cols = ols_regression(X, y)
         print(f"Regression R² = {r_squared:.4f}")
         print(f"Features: {feature_names}")
         print(f"Coefficients: {[f'{c:.2f}' for c in coeffs]}")
+        if singular_cols:
+            dropped = [feature_names[i] for i in singular_cols]
+            print(f"WARNING: singular columns detected - dropped from model: {dropped}")
     else:
         print(f"WARNING: Not enough data for regression ({len(X)} rows, {len(feature_names)} features)")
         coeffs = [0] * len(feature_names)
@@ -1480,7 +1483,7 @@ def main():
     if len(all_pm) > 5:
         pm_X = [[1, r["mileage"]] for r in all_pm]
         pm_y = [r["price"] for r in all_pm]
-        pm_coeffs, _ = ols_regression(pm_X, pm_y)
+        pm_coeffs, _, _ = ols_regression(pm_X, pm_y)
         mileages = sorted(set(r["mileage"] for r in all_pm))
         pm_trend = [
             {"x": min(mileages), "y": round(pm_coeffs[0] + pm_coeffs[1] * min(mileages))},

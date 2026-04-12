@@ -85,7 +85,7 @@ class TestDepreciationRegression:
         """Regression produces sensible coefficients."""
         tier_features = _tier_features(loaded_profile["variants"])
         X, y = build_feature_matrix(reg_rows, variant_by_name, tier_features)
-        coeffs, r_squared = ols_regression(X, y)
+        coeffs, r_squared, _ = ols_regression(X, y)
 
         intercept, age_coef, mileage_coef, spec_coef, tier1_coef = coeffs
 

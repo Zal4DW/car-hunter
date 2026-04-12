@@ -14,7 +14,7 @@ class TestPerfectFits:
         # y = 3 + 2x with no noise
         X = [[1, x] for x in range(1, 11)]
         y = [3 + 2 * x for x in range(1, 11)]
-        coeffs, r2 = ols_regression(X, y)
+        coeffs, r2, _ = ols_regression(X, y)
         assert coeffs[0] == pytest.approx(3.0, abs=1e-9)
         assert coeffs[1] == pytest.approx(2.0, abs=1e-9)
         assert r2 == pytest.approx(1.0, abs=1e-9)
@@ -34,7 +34,7 @@ class TestPerfectFits:
         ]
         X = [[1, x1, x2] for x1, x2 in points]
         y = [10 - 0.5 * x1 + 3 * x2 for x1, x2 in points]
-        coeffs, r2 = ols_regression(X, y)
+        coeffs, r2, _ = ols_regression(X, y)
         assert coeffs[0] == pytest.approx(10.0, abs=1e-6)
         assert coeffs[1] == pytest.approx(-0.5, abs=1e-6)
         assert coeffs[2] == pytest.approx(3.0, abs=1e-6)
@@ -47,14 +47,14 @@ class TestNoisyFits:
         """R squared between zero and one for noisy data."""
         X = [[1, x] for x in range(1, 21)]
         y = [2 * x + (1 if x % 2 == 0 else -1) for x in range(1, 21)]
-        _, r2 = ols_regression(X, y)
+        _, r2, _ = ols_regression(X, y)
         assert 0 < r2 < 1
 
     def test_intercept_only_model_returns_mean(self):
         """Intercept only model returns mean."""
         X = [[1], [1], [1], [1]]
         y = [5, 7, 9, 11]
-        coeffs, r2 = ols_regression(X, y)
+        coeffs, r2, _ = ols_regression(X, y)
         assert coeffs[0] == pytest.approx(8.0)
         assert r2 == pytest.approx(0.0)
 
@@ -65,22 +65,46 @@ class TestEdgeCases:
         """Zero variance y returns r squared zero."""
         X = [[1, x] for x in range(1, 6)]
         y = [5, 5, 5, 5, 5]
-        coeffs, r2 = ols_regression(X, y)
+        coeffs, r2, _ = ols_regression(X, y)
         assert coeffs[0] == pytest.approx(5.0, abs=1e-9)
         assert coeffs[1] == pytest.approx(0.0, abs=1e-9)
         assert r2 == 0
 
     def test_empty_input_returns_zero_coefficients(self):
-        """Empty X and y returns empty coefficients and zero R-squared."""
-        coeffs, r2 = ols_regression([], [])
+        """Empty X and y returns empty coefficients, zero R-squared, empty singular list."""
+        coeffs, r2, singular = ols_regression([], [])
         assert coeffs == []
         assert r2 == 0
+        assert singular == []
 
     def test_collinear_column_does_not_crash(self):
         """Collinear column does not crash."""
         # x2 = 2*x1 - perfectly collinear
         X = [[1, 1, 2], [1, 2, 4], [1, 3, 6], [1, 4, 8]]
         y = [5, 10, 15, 20]
-        coeffs, _ = ols_regression(X, y)
+        result = ols_regression(X, y)
+        coeffs = result[0]
         # Should return finite values, not NaN or raise
         assert all(math.isfinite(c) for c in coeffs)
+
+    def test_collinear_column_reports_singular_index(self):
+        """Singular columns are reported so callers can warn the user.
+
+        Previously ols_regression silently zeroed singular coefficients,
+        hiding the fact that a feature was effectively dropped from the
+        model. Now the function returns (coeffs, r_squared, singular_cols)
+        so the caller can surface a warning.
+        """
+        # Same perfectly-collinear X as above
+        X = [[1, 1, 2], [1, 2, 4], [1, 3, 6], [1, 4, 8]]
+        y = [5, 10, 15, 20]
+        coeffs, r2, singular = ols_regression(X, y)
+        assert len(singular) >= 1, "expected at least one singular column"
+        assert all(isinstance(i, int) for i in singular)
+
+    def test_well_conditioned_input_reports_no_singular_columns(self):
+        """Healthy inputs must report an empty singular list for back-compat."""
+        X = [[1, x] for x in range(1, 11)]
+        y = [3 + 2 * x for x in range(1, 11)]
+        coeffs, r2, singular = ols_regression(X, y)
+        assert singular == []
