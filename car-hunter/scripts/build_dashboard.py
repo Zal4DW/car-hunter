@@ -575,14 +575,6 @@ for r in rows:
         "watch_note": r["watch_note"],
     })
 
-# Lollipop chart data
-lollipop_data = sorted(
-    [r for r in table_data],
-    key=lambda r: r["deviation"],
-)
-
-# Negotiation radar data
-negotiation_data = [r for r in table_data if r["days_on_market"] is not None]
 
 # Price vs mileage
 price_mileage_data = {}
@@ -607,7 +599,6 @@ else:
     pm_trend = []
 
 print(f"\nTable data: {len(table_data)} used listings")
-print(f"Negotiation radar: {len(negotiation_data)} with days-on-market")
 
 # ── Build highlight spec keys for JS ────────────────────────────────
 
@@ -654,8 +645,7 @@ if SEARCH_FILTERS.get("exclude_write_offs"):
     criteria_text += " &bull; Exclude Cat S/N"
 
 # Preferred spec text
-preferred_specs = [s["label"] for s in SPEC_OPTIONS if s.get("highlight")]
-preferred_text = " &bull; ".join(preferred_specs) if preferred_specs else "No specific preferences set"
+preferred_text = " &bull; ".join(highlight_specs) if highlight_specs else "No specific preferences set"
 
 # Generation filter JS logic
 gen_filter_js = "true"  # Default: pass everything
@@ -900,7 +890,6 @@ a.listing-link:hover {{ text-decoration: underline; }}
 const ALL_DATA = {js_safe(table_data)};
 const DEP_CURVES = {js_safe(dep_curves)};
 const SPEC_PREMIUMS = {js_safe(spec_premiums)};
-const NEGOTIATION_DATA = {js_safe(negotiation_data)};
 const PM_TREND = {js_safe(pm_trend)};
 const VARIANT_COLOURS = {js_safe(VARIANT_COLOURS)};
 const HIGHLIGHT_SPECS = {js_safe(highlight_specs)};
