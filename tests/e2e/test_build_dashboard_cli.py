@@ -430,6 +430,12 @@ class TestBuilderEdgeCases:
         assert "WARNING: Not enough data for regression" in result.stdout
         assert output_html.exists()
         assert output_html.stat().st_size > 0
+        # The dashboard itself must surface the fallback - a stdout-only
+        # warning is invisible to anyone opening the HTML file.
+        html = output_html.read_text()
+        assert 'class="regression-warning"' in html or 'id="regression-warning"' in html, (
+            "fallback path must render a prominent regression-warning element"
+        )
 
     def test_multigen_profile_emits_generation_filter_js(
         self,

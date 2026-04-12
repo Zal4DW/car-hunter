@@ -85,12 +85,14 @@ class TestRunRegressionFallback:
         """Fewer rows than features triggers the zero-coeffs fallback."""
         variant_by_name = {"A": {"name": "A", "tier": 0, "colour": "#fff"}}
         rows = [_row("A", 12, 10000, 40000)]  # 1 row, 4 features
-        coeffs, r_squared, reg_data = run_regression(
+        coeffs, r_squared, reg_data, warning = run_regression(
             rows, variant_by_name, tier_features=[]
         )
         assert coeffs == [0, 0, 0, 0]
         assert r_squared == 0
         assert len(reg_data) == 1
+        assert warning is not None
+        assert "insufficient data" in warning.lower()
 
     def test_fallback_annotates_rows_with_zero_predictions(self):
         """Fallback path annotates every row with predicted_price=0.

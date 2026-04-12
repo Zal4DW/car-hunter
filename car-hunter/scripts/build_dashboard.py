@@ -103,8 +103,11 @@ def run_regression(rows, variant_by_name, tier_features):
     """Fit a multivariate OLS model over used listings, then annotate all rows.
 
     Mutates rows in place with `predicted_price`, `value_deviation`, and
-    `value_deviation_pct`. Returns (coeffs, r_squared, reg_data) where
-    reg_data is the subset of rows used for fitting.
+    `value_deviation_pct`. Returns (coeffs, r_squared, reg_data, warning)
+    where warning is either None (healthy model) or a human-readable string
+    explaining why the model is unreliable (insufficient rows, singular
+    features). Callers should surface the warning in the dashboard HTML
+    because a stdout-only message is invisible once the file is opened.
     """
     reg_data = [r for r in rows if not r["is_brand_new_stock"] and r["age_years"] >= 0.5]
     print(f"Regression on {len(reg_data)} used listings (age >= 6 months)")
@@ -115,6 +118,7 @@ def run_regression(rows, variant_by_name, tier_features):
 
     X, y = build_feature_matrix(reg_data, variant_by_name, tier_features)
 
+    warning = None
     if len(X) >= len(feature_names):
         coeffs, r_squared, singular_cols = ols_regression(X, y)
         print(f"Regression R² = {r_squared:.4f}")
@@ -123,10 +127,19 @@ def run_regression(rows, variant_by_name, tier_features):
         if singular_cols:
             dropped = [feature_names[i] for i in singular_cols]
             print(f"WARNING: singular columns detected - dropped from model: {dropped}")
+            warning = (
+                f"Model unreliable: features {', '.join(dropped)} were collinear "
+                f"with other columns and dropped. Value scores may be skewed."
+            )
     else:
         print(f"WARNING: Not enough data for regression ({len(X)} rows, {len(feature_names)} features)")
         coeffs = [0] * len(feature_names)
         r_squared = 0
+        warning = (
+            f"Insufficient data for regression: {len(X)} used listings available, "
+            f"{len(feature_names)} features required. Value scores and deal rankings "
+            f"are not meaningful below this threshold."
+        )
 
     for r in rows:
         features = row_to_features(r, variant_by_name, tier_features)
@@ -142,7 +155,7 @@ def run_regression(rows, variant_by_name, tier_features):
             r["value_deviation"] = 0
             r["value_deviation_pct"] = 0
 
-    return coeffs, r_squared, reg_data
+    return coeffs, r_squared, reg_data, warning
 
 
 def enrich_rows(rows, snapshots, watchlist, listing_ids, price_changes, lid_encoding, today, has_listing_ids):
@@ -359,6 +372,7 @@ def build_html(ctx):
     r_squared = ctx["r_squared"]
     today_str = ctx["today_str"]
     reg_data = ctx["reg_data"]
+    regression_warning = ctx["regression_warning"]
 
     # ── Build HTML ──────────────────────────────────────────────────────
 
@@ -487,6 +501,8 @@ def build_html(ctx):
     .toast {{ position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); background: #1e293b; color: #fff; padding: 12px 20px; border-radius: 8px; border: 1px solid #334155; font-size: 13px; opacity: 0; transition: opacity 0.2s; pointer-events: none; z-index: 1000; }}
     .toast.show {{ opacity: 1; }}
     .pulse-row-label {{ font-size: 11px; color: {text_muted}; text-transform: uppercase; letter-spacing: 0.05em; margin: 12px 0 6px; }}
+    .regression-warning {{ margin: 16px 32px 0; padding: 16px 20px; background: rgba(239,68,68,0.12); border: 1px solid rgba(239,68,68,0.45); border-radius: 12px; color: #fca5a5; font-size: 14px; line-height: 1.5; }}
+    .regression-warning strong {{ color: #fecaca; display: block; margin-bottom: 4px; font-size: 13px; text-transform: uppercase; letter-spacing: 0.05em; }}
     @media (max-width: 900px) {{
         .chart-grid {{ grid-template-columns: 1fr; }}
         .kpi-row {{ grid-template-columns: repeat(2, 1fr); }}
@@ -501,7 +517,7 @@ def build_html(ctx):
         <h1>{DISPLAY_NAME} &mdash; Buyer Intelligence Dashboard<span id="captureBadge" class="capture-badge capture-badge-{CAPTURE_BADGE['colour']}">{CAPTURE_BADGE['label']}</span></h1>
         <p>{len(table_data)} used listings &bull; Data collected {today_str} &bull; Regression model R&sup2; = {r_squared:.3f}</p>
     </div>
-
+    {('<div class="regression-warning"><strong>Regression warning</strong>' + regression_warning + '</div>') if regression_warning else ''}
     <div class="criteria">
         <div class="criteria-section">
             <div class="criteria-label" style="color: #60a5fa;">Search Criteria</div>
@@ -1346,7 +1362,7 @@ def main():
     # ── Multivariate regression ─────────────────────────────────────────
     # price = b0 + b1*age_months + b2*mileage + b3*spec_score + b4*tier_1 + b5*tier_2 + ...
 
-    coeffs, r_squared, reg_data = run_regression(rows, VARIANT_BY_NAME, tier_features)
+    coeffs, r_squared, reg_data, regression_warning = run_regression(rows, VARIANT_BY_NAME, tier_features)
 
     # ── Spec premium calculation ────────────────────────────────────────
 
@@ -1520,6 +1536,7 @@ def main():
         "r_squared": r_squared,
         "today_str": today_str,
         "reg_data": reg_data,
+        "regression_warning": regression_warning,
     })
 
     with open(OUTPUT_PATH, 'w') as f:
