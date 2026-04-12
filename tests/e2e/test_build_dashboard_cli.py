@@ -168,6 +168,46 @@ class TestBuilderFailsHelpfully:
         )
         assert result.returncode != 0
 
+    def test_profile_missing_required_key(
+        self,
+        tmp_path: Path,
+        builder_script: Path,
+        fixture_csv_path: Path,
+        subprocess_env: dict,
+    ):
+        """Profile missing a required key gives a clear error message."""
+        import json
+
+        bad_profile = tmp_path / "bad-profile.json"
+        bad_profile.write_text(json.dumps({
+            "profile_name": "test",
+            "display_name": "Test",
+            # "variants" deliberately omitted
+            "generations": [],
+            "spec_options": [],
+            "search_filters": {},
+            "dashboard": {},
+        }))
+        result = subprocess.run(
+            [
+                sys.executable,
+                str(builder_script),
+                "--profile",
+                str(bad_profile),
+                "--csv",
+                str(fixture_csv_path),
+            ],
+            capture_output=True,
+            text=True,
+            env=subprocess_env,
+            timeout=BUILDER_TIMEOUT_SECONDS,
+        )
+        assert result.returncode != 0
+        combined = result.stderr + result.stdout
+        # Must be a clear message, not a raw KeyError traceback
+        assert "missing required" in combined.lower()
+        assert "variants" in combined
+
 
 class TestBuilderEdgeCases:
     """Cover conditional branches the main happy path doesn't exercise.

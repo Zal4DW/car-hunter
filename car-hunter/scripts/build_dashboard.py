@@ -62,6 +62,17 @@ args = parser.parse_args()
 with open(args.profile, "r") as f:
     profile = json.load(f)
 
+_REQUIRED_PROFILE_KEYS = (
+    "profile_name", "display_name", "variants", "generations",
+    "spec_options", "search_filters", "dashboard",
+)
+_missing_keys = [k for k in _REQUIRED_PROFILE_KEYS if k not in profile]
+if _missing_keys:
+    raise SystemExit(
+        f"Profile {args.profile} is missing required keys: {', '.join(_missing_keys)}. "
+        f"See car-profile-schema.md for the expected format."
+    )
+
 PROFILE_NAME = profile["profile_name"]
 DISPLAY_NAME = profile["display_name"]
 VARIANTS = profile["variants"]
