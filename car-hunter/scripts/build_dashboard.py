@@ -45,8 +45,18 @@ import re as _re
 
 def load_profile(path):
     """Load and validate a car profile JSON, returning derived lookups."""
-    with open(path, "r") as f:
-        profile = json.load(f)
+    try:
+        with open(path, "r") as f:
+            profile = json.load(f)
+    except FileNotFoundError as exc:
+        raise SystemExit(
+            f"Profile file not found: {path}. "
+            f"Run /setup-car to create one, or check ${{CLAUDE_PLUGIN_DATA}}/profiles/."
+        ) from exc
+    except json.JSONDecodeError as exc:
+        raise SystemExit(
+            f"Profile {path} is not valid JSON: {exc}"
+        ) from exc
 
     _REQUIRED_KEYS = (
         "profile_name", "display_name", "variants", "generations",
