@@ -134,10 +134,10 @@ def get_tier_value(row, variant_by_name):
 def retained_pct(price, new_price):
     """Percentage of the original RRP retained at the current asking price.
 
-    Returns 0 when new_price is zero or missing to avoid divide-by-zero.
+    Returns None when new_price is zero, missing, or negative (unknown RRP).
     """
     if not new_price or new_price <= 0:
-        return 0
+        return None
     return round((price / new_price) * 100, 1)
 
 
