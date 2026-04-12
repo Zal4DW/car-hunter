@@ -237,6 +237,39 @@ class TestBuilderFailsHelpfully:
         assert "missing required" in combined.lower()
         assert "price" in combined
 
+    def test_csv_row_with_non_numeric_price(
+        self,
+        tmp_path: Path,
+        builder_script: Path,
+        fixture_profile_path: Path,
+        subprocess_env: dict,
+    ):
+        """CSV row with non-numeric price gives a clear error naming the row and field."""
+        bad_csv = tmp_path / "bad-row.csv"
+        bad_csv.write_text(
+            "variant,price,year,mileage\n"
+            "Bolt Base,35000,2023,15000\n"
+            "Bolt Sport,TBC,2024,10000\n"
+        )
+        result = subprocess.run(
+            [
+                sys.executable,
+                str(builder_script),
+                "--profile",
+                str(fixture_profile_path),
+                "--csv",
+                str(bad_csv),
+            ],
+            capture_output=True,
+            text=True,
+            env=subprocess_env,
+            timeout=BUILDER_TIMEOUT_SECONDS,
+        )
+        assert result.returncode != 0
+        combined = result.stderr + result.stdout
+        assert "row 2" in combined.lower() or "row 2" in combined
+        assert "TBC" in combined
+
 
 class TestBuilderEdgeCases:
     """Cover conditional branches the main happy path doesn't exercise.
