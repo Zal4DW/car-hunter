@@ -504,28 +504,34 @@ def load_csv(path, spec_options):
     return rows
 
 
-def build_html(ctx):
-    """Render the dashboard HTML from the context dict."""
-    DISPLAY_NAME = ctx["DISPLAY_NAME"]
-    DASHBOARD = ctx["DASHBOARD"]
-    VARIANTS = ctx["VARIANTS"]
-    GENERATIONS = ctx["GENERATIONS"]
-    SEARCH_FILTERS = ctx["SEARCH_FILTERS"]
-    SPEC_OPTIONS = ctx["SPEC_OPTIONS"]
-    VARIANT_COLOURS = ctx["VARIANT_COLOURS"]
-    highlight_specs = ctx["highlight_specs"]
-    table_data = ctx["table_data"]
-    dep_curves = ctx["dep_curves"]
-    spec_premiums = ctx["spec_premiums"]
-    pm_trend = ctx["pm_trend"]
-    WATCHLIST = ctx["WATCHLIST"]
-    TIME_SERIES = ctx["TIME_SERIES"]
-    SNAPSHOT_PULSE = ctx["SNAPSHOT_PULSE"]
-    CAPTURE_BADGE = ctx["CAPTURE_BADGE"]
-    r_squared = ctx["r_squared"]
-    today_str = ctx["today_str"]
-    reg_data = ctx["reg_data"]
-    regression_warning = ctx["regression_warning"]
+def build_html(
+    *,
+    DISPLAY_NAME,
+    DASHBOARD,
+    VARIANTS,
+    GENERATIONS,
+    SEARCH_FILTERS,
+    SPEC_OPTIONS,
+    VARIANT_COLOURS,
+    highlight_specs,
+    table_data,
+    dep_curves,
+    spec_premiums,
+    pm_trend,
+    WATCHLIST,
+    TIME_SERIES,
+    SNAPSHOT_PULSE,
+    CAPTURE_BADGE,
+    r_squared,
+    today_str,
+    reg_count,
+    regression_warning,
+):
+    """Render the dashboard HTML from explicit keyword arguments.
+
+    `reg_count` is the number of used listings fed into the regression (only
+    the count is needed by the template, not the full row list).
+    """
 
     # ── Build HTML ──────────────────────────────────────────────────────
 
@@ -759,7 +765,7 @@ def build_html(ctx):
                 <div class="chart-container">
                     <canvas id="dealScoreChart"></canvas>
                 </div>
-                <div class="model-info">Model: price = f(age, mileage, spec score, variant tier) &bull; R&sup2; = {r_squared:.3f} &bull; Based on {len(reg_data)} used listings</div>
+                <div class="model-info">Model: price = f(age, mileage, spec score, variant tier) &bull; R&sup2; = {r_squared:.3f} &bull; Based on {reg_count} used listings</div>
             </div>
 
             <div class="chart-card">
@@ -1498,28 +1504,28 @@ def main():
 
     # ── Build HTML ──────────────────────────────────────────────────────
 
-    html = build_html({
-        "DISPLAY_NAME": DISPLAY_NAME,
-        "DASHBOARD": DASHBOARD,
-        "VARIANTS": VARIANTS,
-        "GENERATIONS": GENERATIONS,
-        "SEARCH_FILTERS": SEARCH_FILTERS,
-        "SPEC_OPTIONS": SPEC_OPTIONS,
-        "VARIANT_COLOURS": VARIANT_COLOURS,
-        "highlight_specs": highlight_specs,
-        "table_data": table_data,
-        "dep_curves": dep_curves,
-        "spec_premiums": spec_premiums,
-        "pm_trend": pm_trend,
-        "WATCHLIST": WATCHLIST,
-        "TIME_SERIES": TIME_SERIES,
-        "SNAPSHOT_PULSE": SNAPSHOT_PULSE,
-        "CAPTURE_BADGE": CAPTURE_BADGE,
-        "r_squared": r_squared,
-        "today_str": today_str,
-        "reg_data": reg_data,
-        "regression_warning": regression_warning,
-    })
+    html = build_html(
+        DISPLAY_NAME=DISPLAY_NAME,
+        DASHBOARD=DASHBOARD,
+        VARIANTS=VARIANTS,
+        GENERATIONS=GENERATIONS,
+        SEARCH_FILTERS=SEARCH_FILTERS,
+        SPEC_OPTIONS=SPEC_OPTIONS,
+        VARIANT_COLOURS=VARIANT_COLOURS,
+        highlight_specs=highlight_specs,
+        table_data=table_data,
+        dep_curves=dep_curves,
+        spec_premiums=spec_premiums,
+        pm_trend=pm_trend,
+        WATCHLIST=WATCHLIST,
+        TIME_SERIES=TIME_SERIES,
+        SNAPSHOT_PULSE=SNAPSHOT_PULSE,
+        CAPTURE_BADGE=CAPTURE_BADGE,
+        r_squared=r_squared,
+        today_str=today_str,
+        reg_count=len(reg_data),
+        regression_warning=regression_warning,
+    )
 
     with open(OUTPUT_PATH, 'w') as f:
         f.write(html)
