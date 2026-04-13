@@ -286,6 +286,20 @@ def validate_watchlist(data, source="watchlist"):
     return {"listings": listings}
 
 
+def build_time_series(snapshots, today, days=28):
+    """Thin wrapper that extracts the fields rolling_window needs from the
+    builder's snapshot list and calls it. Returns [] for an empty snapshot
+    list so callers can hand the result straight to the template.
+    """
+    if not snapshots:
+        return []
+    dated = [
+        {"date": s["date"], "ids": s["ids"], "median_price": s["median_price"]}
+        for s in snapshots
+    ]
+    return rolling_window(dated, today, days=days)
+
+
 def build_tier_features(variants):
     """Build the tier dummy-variable feature list for the regression.
 

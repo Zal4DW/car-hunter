@@ -33,13 +33,13 @@ from dashboard_lib import (  # noqa: E402
     retained_pct as _retained_pct,
     build_feature_matrix,
     build_tier_features,
+    build_time_series,
     compute_dep_curves,
     compute_pm_trend,
     compute_spec_premiums,
     row_to_features,
     safe_int_price,
     snapshot_diff,
-    rolling_window,
     validate_watchlist,
 )
 import glob as _glob
@@ -808,13 +808,7 @@ def main():
     )
 
     # ── Rolling 28-day time series ──────────────────────────────────────
-    TIME_SERIES = []
-    if SNAPSHOTS:
-        TIME_SERIES = rolling_window(
-            [{"date": s["date"], "ids": s["ids"], "median_price": s["median_price"]} for s in SNAPSHOTS],
-            today,
-            days=28,
-        )
+    TIME_SERIES = build_time_series(SNAPSHOTS, today, days=28)
 
     # ── Spec labels and scores ──────────────────────────────────────────
 
