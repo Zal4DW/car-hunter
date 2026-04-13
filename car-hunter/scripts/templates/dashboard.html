@@ -606,69 +606,145 @@
         });
     }
 
+    // DOM builders for the table row. Every listing field flows through
+    // textContent / setAttribute so scraped data cannot inject markup when
+    // the user opens the dashboard.
+
+    function makeSpan(cls, text) {
+        const s = document.createElement('span');
+        if (cls) s.className = cls;
+        if (text !== undefined) s.textContent = text;
+        return s;
+    }
+
     function getValueTag(dev) {
-        if (dev < -3000) return `<span class="tag tag-green">&pound;$${Math.abs(dev).toLocaleString('en-GB')} under</span>`;
-        if (dev < -1000) return `<span class="tag tag-blue">&pound;$${Math.abs(dev).toLocaleString('en-GB')} under</span>`;
-        if (dev < 1000) return `<span class="tag tag-amber">Fair</span>`;
-        return `<span class="tag tag-red">&pound;$${dev.toLocaleString('en-GB')} over</span>`;
+        if (dev < -3000) return makeSpan('tag tag-green', '£' + Math.abs(dev).toLocaleString('en-GB') + ' under');
+        if (dev < -1000) return makeSpan('tag tag-blue', '£' + Math.abs(dev).toLocaleString('en-GB') + ' under');
+        if (dev < 1000) return makeSpan('tag tag-amber', 'Fair');
+        return makeSpan('tag tag-red', '£' + dev.toLocaleString('en-GB') + ' over');
     }
 
     function getDaysTag(days) {
-        if (days === null) return '<span style="color:#6b7280;">&mdash;</span>';
-        if (days <= 7) return `<span class="tag tag-green">$${days}d</span>`;
-        if (days <= 21) return `<span class="tag tag-blue">$${days}d</span>`;
-        if (days <= 42) return `<span class="tag tag-amber">$${days}d</span>`;
-        return `<span class="tag tag-red">$${days}d</span>`;
+        if (days === null) {
+            const s = makeSpan('', '—');
+            s.style.color = '#6b7280';
+            return s;
+        }
+        const cls = days <= 7 ? 'tag tag-green'
+                  : days <= 21 ? 'tag tag-blue'
+                  : days <= 42 ? 'tag tag-amber'
+                  : 'tag tag-red';
+        return makeSpan(cls, days + 'd');
     }
 
     function getTrendTag(change) {
-        if (change === 0) return '<span style="color:#6b7280;">&mdash;</span>';
-        if (change < 0) return `<span style="color:#f87171;font-weight:600;">&darr;&pound;$${Math.abs(change).toLocaleString('en-GB')}</span>`;
-        return `<span style="color:#4ade80;font-weight:600;">&uarr;&pound;$${change.toLocaleString('en-GB')}</span>`;
+        if (change === 0) {
+            const s = makeSpan('', '—');
+            s.style.color = '#6b7280';
+            return s;
+        }
+        const s = document.createElement('span');
+        s.style.fontWeight = '600';
+        if (change < 0) {
+            s.style.color = '#f87171';
+            s.textContent = '↓£' + Math.abs(change).toLocaleString('en-GB');
+        } else {
+            s.style.color = '#4ade80';
+            s.textContent = '↑£' + change.toLocaleString('en-GB');
+        }
+        return s;
     }
 
-    function getSpecHtml(row) {
-        if (!row.spec_labels || row.spec_labels.length === 0) return '<span style="color:#6b7280;">Base</span>';
+    function getSpecNodes(row) {
+        if (!row.spec_labels || row.spec_labels.length === 0) {
+            const s = makeSpan('', 'Base');
+            s.style.color = '#6b7280';
+            return [s];
+        }
         return row.spec_labels.map(s => {
             const cls = HIGHLIGHT_SPECS.includes(s) ? 'spec-tag highlight' : 'spec-tag';
-            return `<span class="$${cls}">$${s}</span>`;
-        }).join('');
+            return makeSpan(cls, s);
+        });
     }
 
-    function renderRow(r) {
-        const loc = r.autotrader_url
-            ? `<a href="$${r.autotrader_url}" target="_blank" class="listing-link">$${r.location}</a>`
-            : r.location;
-        const depYr = r.dep_pa !== null ? '&pound;' + r.dep_pa.toLocaleString('en-GB') : '<span style="color:#6b7280;">N/A</span>';
-        const starCls = r.watched ? 'star-btn active' : 'star-btn';
-        const starGlyph = r.watched ? '&#9733;' : '&#9734;';
-        const starTitle = r.watched ? 'Watched' : 'Star this listing';
-        const starId = encodeURIComponent(r.listing_id || '');
-        const starBtn = `<button class="$${starCls}" data-listing-id="$${starId}" title="$${starTitle}">$${starGlyph}</button>`;
+    function buildLocationCell(r) {
+        const td = document.createElement('td');
+        if (r.autotrader_url && /^https?:\/\//i.test(r.autotrader_url)) {
+            const a = document.createElement('a');
+            a.className = 'listing-link';
+            a.target = '_blank';
+            a.rel = 'noopener noreferrer';
+            a.setAttribute('href', r.autotrader_url);
+            a.textContent = r.location || '';
+            td.appendChild(a);
+        } else {
+            td.textContent = r.location || '';
+        }
+        return td;
+    }
 
-        return `<td data-watched="$${r.watched ? 'true' : 'false'}">$${starBtn}</td>
-            <td>$${r.variant}</td>
-            <td>$${r.age.toFixed(1)}yr</td>
-            <td>&pound;$${r.price.toLocaleString('en-GB')}</td>
-            <td>&pound;$${r.predicted.toLocaleString('en-GB')}</td>
-            <td>$${getValueTag(r.deviation)}</td>
-            <td>$${r.mileage.toLocaleString('en-GB')}</td>
-            <td>$${depYr}</td>
-            <td>$${getDaysTag(r.days_on_market)}</td>
-            <td>$${getTrendTag(r.price_change)}</td>
-            <td>$${getSpecHtml(r)}</td>
-            <td>$${loc}</td>`;
+    function buildStarCell(r) {
+        const td = document.createElement('td');
+        td.dataset.watched = r.watched ? 'true' : 'false';
+        const btn = document.createElement('button');
+        btn.className = r.watched ? 'star-btn active' : 'star-btn';
+        btn.dataset.listingId = r.listing_id || '';
+        btn.title = r.watched ? 'Watched' : 'Star this listing';
+        btn.textContent = r.watched ? '★' : '☆';
+        td.appendChild(btn);
+        return td;
+    }
+
+    function appendTextCell(tr, text) {
+        const td = document.createElement('td');
+        td.textContent = text;
+        tr.appendChild(td);
+    }
+
+    function appendNodeCell(tr, node) {
+        const td = document.createElement('td');
+        td.appendChild(node);
+        tr.appendChild(td);
+    }
+
+    function renderRow(tr, r) {
+        tr.appendChild(buildStarCell(r));
+        appendTextCell(tr, r.variant);
+        appendTextCell(tr, r.age.toFixed(1) + 'yr');
+        appendTextCell(tr, '£' + r.price.toLocaleString('en-GB'));
+        appendTextCell(tr, '£' + r.predicted.toLocaleString('en-GB'));
+        appendNodeCell(tr, getValueTag(r.deviation));
+        appendTextCell(tr, r.mileage.toLocaleString('en-GB'));
+        if (r.dep_pa !== null) {
+            appendTextCell(tr, '£' + r.dep_pa.toLocaleString('en-GB'));
+        } else {
+            const na = makeSpan('', 'N/A');
+            na.style.color = '#6b7280';
+            appendNodeCell(tr, na);
+        }
+        appendNodeCell(tr, getDaysTag(r.days_on_market));
+        appendNodeCell(tr, getTrendTag(r.price_change));
+        const specTd = document.createElement('td');
+        getSpecNodes(r).forEach(node => specTd.appendChild(node));
+        tr.appendChild(specTd);
+        tr.appendChild(buildLocationCell(r));
+    }
+
+    function renderTableRows(data) {
+        const tbody = document.getElementById('tableBody');
+        tbody.textContent = '';
+        const frag = document.createDocumentFragment();
+        data.forEach(r => {
+            const tr = document.createElement('tr');
+            renderRow(tr, r);
+            frag.appendChild(tr);
+        });
+        tbody.appendChild(frag);
     }
 
     function updateTable() {
         const data = getFilteredData().sort((a, b) => a.deviation - b.deviation);
-        const tbody = document.getElementById('tableBody');
-        tbody.innerHTML = '';
-        data.forEach(r => {
-            const tr = document.createElement('tr');
-            tr.innerHTML = renderRow(r);
-            tbody.appendChild(tr);
-        });
+        renderTableRows(data);
     }
 
     let sortCol = -1, sortAsc = true;
@@ -689,14 +765,7 @@
             if (typeof av === 'string') return sortAsc ? av.localeCompare(bv) : bv.localeCompare(av);
             return sortAsc ? av - bv : bv - av;
         });
-
-        const tbody = document.getElementById('tableBody');
-        tbody.innerHTML = '';
-        data.forEach(r => {
-            const tr = document.createElement('tr');
-            tr.innerHTML = renderRow(r);
-            tbody.appendChild(tr);
-        });
+        renderTableRows(data);
     }
 
     function updateAll() {
