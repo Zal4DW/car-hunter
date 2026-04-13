@@ -826,12 +826,19 @@ def main():
     if len(all_pm) > 5:
         pm_X = [[1, r["mileage"]] for r in all_pm]
         pm_y = [r["price"] for r in all_pm]
-        pm_coeffs, _, _ = ols_regression(pm_X, pm_y)
-        mileages = sorted(set(r["mileage"] for r in all_pm))
-        pm_trend = [
-            {"x": min(mileages), "y": round(pm_coeffs[0] + pm_coeffs[1] * min(mileages))},
-            {"x": max(mileages), "y": round(pm_coeffs[0] + pm_coeffs[1] * max(mileages))},
-        ]
+        pm_coeffs, _, pm_singular = ols_regression(pm_X, pm_y)
+        if pm_singular:
+            print(
+                f"WARNING: price-vs-mileage trendline degenerate "
+                f"(singular columns {pm_singular}), suppressing"
+            )
+            pm_trend = []
+        else:
+            mileages = sorted(set(r["mileage"] for r in all_pm))
+            pm_trend = [
+                {"x": min(mileages), "y": round(pm_coeffs[0] + pm_coeffs[1] * min(mileages))},
+                {"x": max(mileages), "y": round(pm_coeffs[0] + pm_coeffs[1] * max(mileages))},
+            ]
     else:
         pm_trend = []
 
