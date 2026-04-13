@@ -620,6 +620,7 @@ def build_html(
         capture_colour=CAPTURE_BADGE["colour"],
         capture_label=CAPTURE_BADGE["label"],
         table_count=len(table_data),
+        reg_count=reg_count,
         regression_warning_html=(
             f'<div class="regression-warning"><strong>Regression warning</strong>{regression_warning}</div>'
             if regression_warning else ""
