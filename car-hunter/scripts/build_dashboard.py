@@ -526,11 +526,13 @@ def build_html(
     today_str,
     reg_count,
     regression_warning,
+    template_path=None,
 ):
     """Render the dashboard HTML from explicit keyword arguments.
 
     `reg_count` is the number of used listings fed into the regression (only
     the count is needed by the template, not the full row list).
+    `template_path` overrides the default template location, used by tests.
     """
 
     # ── Build HTML ──────────────────────────────────────────────────────
@@ -596,46 +598,67 @@ def build_html(
     # non-trivial expressions so the template can use plain string.Template
     # $name placeholders without needing f-string machinery.
     import string as _string
-    _template_path = os.path.join(
-        os.path.dirname(os.path.abspath(__file__)), "templates", "dashboard.html"
-    )
-    with open(_template_path, "r") as _tf:
-        _template = _string.Template(_tf.read())
-    html = _template.substitute(
-        DISPLAY_NAME=DISPLAY_NAME,
-        bg=bg,
-        card_bg=card_bg,
-        card_border=card_border,
-        text_colour=text_colour,
-        text_muted=text_muted,
-        today_str=today_str,
-        variant_options_html=variant_options_html,
-        gen_options_html=gen_options_html,
-        mileage_options_html=mileage_options_html,
-        budget_options_html=budget_options_html,
-        criteria_text=criteria_text,
-        preferred_text=preferred_text,
-        gen_filter_js=gen_filter_js,
-        r_squared_formatted=f"{r_squared:.3f}",
-        capture_colour=CAPTURE_BADGE["colour"],
-        capture_label=CAPTURE_BADGE["label"],
-        table_count=len(table_data),
-        reg_count=reg_count,
-        regression_warning_html=(
-            f'<div class="regression-warning"><strong>Regression warning</strong>{regression_warning}</div>'
-            if regression_warning else ""
-        ),
-        all_data_json=js_safe(table_data),
-        dep_curves_json=js_safe(dep_curves),
-        spec_premiums_json=js_safe(spec_premiums),
-        pm_trend_json=js_safe(pm_trend),
-        variant_colours_json=js_safe(VARIANT_COLOURS),
-        highlight_specs_json=js_safe(highlight_specs),
-        watchlist_json=js_safe(WATCHLIST),
-        time_series_json=js_safe(TIME_SERIES),
-        snapshot_pulse_json=js_safe(SNAPSHOT_PULSE),
-        capture_json=js_safe(CAPTURE_BADGE),
-    )
+    if template_path is None:
+        template_path = os.path.join(
+            os.path.dirname(os.path.abspath(__file__)), "templates", "dashboard.html"
+        )
+    try:
+        with open(template_path, "r") as _tf:
+            _template = _string.Template(_tf.read())
+    except FileNotFoundError as exc:
+        raise SystemExit(
+            f"Dashboard template not found at {template_path}. "
+            f"This indicates a corrupt plugin install - reinstall car-hunter from the marketplace."
+        ) from exc
+    except OSError as exc:
+        raise SystemExit(
+            f"Cannot read dashboard template {template_path}: {exc}"
+        ) from exc
+    try:
+        html = _template.substitute(
+            DISPLAY_NAME=DISPLAY_NAME,
+            bg=bg,
+            card_bg=card_bg,
+            card_border=card_border,
+            text_colour=text_colour,
+            text_muted=text_muted,
+            today_str=today_str,
+            variant_options_html=variant_options_html,
+            gen_options_html=gen_options_html,
+            mileage_options_html=mileage_options_html,
+            budget_options_html=budget_options_html,
+            criteria_text=criteria_text,
+            preferred_text=preferred_text,
+            gen_filter_js=gen_filter_js,
+            r_squared_formatted=f"{r_squared:.3f}",
+            capture_colour=CAPTURE_BADGE["colour"],
+            capture_label=CAPTURE_BADGE["label"],
+            table_count=len(table_data),
+            reg_count=reg_count,
+            regression_warning_html=(
+                f'<div class="regression-warning"><strong>Regression warning</strong>{regression_warning}</div>'
+                if regression_warning else ""
+            ),
+            all_data_json=js_safe(table_data),
+            dep_curves_json=js_safe(dep_curves),
+            spec_premiums_json=js_safe(spec_premiums),
+            pm_trend_json=js_safe(pm_trend),
+            variant_colours_json=js_safe(VARIANT_COLOURS),
+            highlight_specs_json=js_safe(highlight_specs),
+            watchlist_json=js_safe(WATCHLIST),
+            time_series_json=js_safe(TIME_SERIES),
+            snapshot_pulse_json=js_safe(SNAPSHOT_PULSE),
+            capture_json=js_safe(CAPTURE_BADGE),
+        )
+    except KeyError as exc:
+        raise SystemExit(
+            f"Dashboard template {template_path} references unknown placeholder {exc}. "
+            f"Template and builder are out of sync - check your plugin version."
+        ) from exc
+    except ValueError as exc:
+        raise SystemExit(
+            f"Dashboard template {template_path} has malformed $-substitution: {exc}"
+        ) from exc
     return html
 
 

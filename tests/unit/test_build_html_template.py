@@ -16,6 +16,8 @@ _SCRIPTS = Path(__file__).resolve().parent.parent.parent / "car-hunter" / "scrip
 if str(_SCRIPTS) not in sys.path:
     sys.path.insert(0, str(_SCRIPTS))
 
+from build_dashboard import build_html  # noqa: E402
+
 _TEMPLATE_PATH = _SCRIPTS / "templates" / "dashboard.html"
 
 # The full set of kwargs the builder passes to string.Template.substitute().
@@ -104,3 +106,70 @@ class TestTemplateIdentifiers:
                 f"Template placeholder ${name} survived substitution - "
                 f"likely wrapped in $$ by mistake"
             )
+
+
+def _minimal_build_html_kwargs():
+    """Build the minimum set of valid kwargs to call build_html()."""
+    return dict(
+        DISPLAY_NAME="Test Car",
+        DASHBOARD={"theme": {
+            "bg": "#000", "card_bg": "#111", "card_border": "#222",
+            "text": "#fff", "text_muted": "#888",
+        }, "mileage_filter_options": [20000], "mileage_filter_default": 20000,
+           "budget_filter_options": [50000], "budget_filter_default": 50000},
+        VARIANTS=[{"name": "Base", "tier": 0, "colour": "#abc"}],
+        GENERATIONS=[{"name": "gen1", "label": "Gen 1", "year_from": 2020}],
+        SEARCH_FILTERS={"max_price": 100000, "max_mileage": 50000,
+                        "max_distance": 200, "postcode": "SW1A 1AA"},
+        SPEC_OPTIONS=[],
+        VARIANT_COLOURS={"Base": "#abc"},
+        highlight_specs=[],
+        table_data=[],
+        dep_curves={},
+        spec_premiums=[],
+        pm_trend=[],
+        WATCHLIST={"listings": {}},
+        TIME_SERIES=[],
+        SNAPSHOT_PULSE={"new": 0, "removed": 0, "price_drops": 0, "previous_date": None},
+        CAPTURE_BADGE={"status": "unknown", "colour": "grey", "label": "No capture"},
+        r_squared=0.0,
+        today_str="12 April 2026",
+        reg_count=0,
+        regression_warning=None,
+    )
+
+
+class TestBuildHtmlErrorHandling:
+    """build_html() must surface template I/O and substitution errors clearly."""
+
+    def test_missing_template_file_gives_clear_error(self, tmp_path):
+        """Pointing at a non-existent template must raise SystemExit with a
+        clear 'reinstall plugin' style message, not a raw FileNotFoundError.
+        """
+        kwargs = _minimal_build_html_kwargs()
+        kwargs["template_path"] = str(tmp_path / "does-not-exist.html")
+        with pytest.raises(SystemExit) as exc_info:
+            build_html(**kwargs)
+        msg = str(exc_info.value)
+        assert "template" in msg.lower()
+        assert "does-not-exist" in msg
+
+    def test_template_with_unknown_placeholder_gives_clear_error(self, tmp_path):
+        """A template that references a placeholder the builder doesn't supply
+        must raise SystemExit naming the offending placeholder.
+        """
+        bad_template = tmp_path / "bad.html"
+        bad_template.write_text("<html>$missing_placeholder</html>")
+        kwargs = _minimal_build_html_kwargs()
+        kwargs["template_path"] = str(bad_template)
+        with pytest.raises(SystemExit) as exc_info:
+            build_html(**kwargs)
+        msg = str(exc_info.value)
+        assert "missing_placeholder" in msg or "unknown placeholder" in msg.lower()
+
+    def test_happy_path_renders_without_raising(self):
+        """Smoke test: the real template file rendered with valid stubs works."""
+        kwargs = _minimal_build_html_kwargs()
+        html = build_html(**kwargs)
+        assert "<!DOCTYPE html>" in html
+        assert "Test Car" in html
