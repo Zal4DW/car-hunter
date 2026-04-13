@@ -127,15 +127,35 @@ def load_profile(path):
                 f"Profile {path}: spec_options[{i}] is missing keys: {', '.join(_missing_s)}"
             )
 
-    # Generations container + per-entry shape + new_prices shape
+    # search_filters container + required keys (indexed by build_html())
+    if not isinstance(profile["search_filters"], dict):
+        raise SystemExit(
+            f"Profile {path}: search_filters must be an object, "
+            f"got {type(profile['search_filters']).__name__}"
+        )
+    _REQUIRED_FILTER_KEYS = ("max_price", "max_mileage", "max_distance", "postcode")
+    _missing_filters = [k for k in _REQUIRED_FILTER_KEYS if k not in profile["search_filters"]]
+    if _missing_filters:
+        raise SystemExit(
+            f"Profile {path}: search_filters is missing keys: {', '.join(_missing_filters)}. "
+            f"See car-profile-schema.md for the expected format."
+        )
+
+    # Generations container + per-entry shape + required keys + new_prices shape
     if not isinstance(profile["generations"], list):
         raise SystemExit(
             f"Profile {path}: generations must be a list, got {type(profile['generations']).__name__}"
         )
+    _REQUIRED_GEN_KEYS = ("name", "label", "year_from")
     for i, gen in enumerate(profile["generations"]):
         if not isinstance(gen, dict):
             raise SystemExit(
                 f"Profile {path}: generations[{i}] must be an object, got {type(gen).__name__}"
+            )
+        _missing_gen = [k for k in _REQUIRED_GEN_KEYS if k not in gen]
+        if _missing_gen:
+            raise SystemExit(
+                f"Profile {path}: generations[{i}] is missing keys: {', '.join(_missing_gen)}"
             )
         _gen_new_prices = gen.get("new_prices", {})
         if not isinstance(_gen_new_prices, dict):

@@ -307,6 +307,84 @@ class TestBuilderFailsHelpfully:
         assert "Traceback" not in combined
         assert "tier" in combined.lower()
 
+    def test_profile_search_filters_not_a_dict(
+        self,
+        tmp_path: Path,
+        builder_script: Path,
+        fixture_csv_path: Path,
+        fixture_profile_path: Path,
+        subprocess_env: dict,
+    ):
+        """Profile with non-dict search_filters gives a clear error, not AttributeError."""
+        import json
+        base = json.loads(fixture_profile_path.read_text())
+        base["search_filters"] = ["not", "a", "dict"]
+        bad_profile = tmp_path / "bad-search-filters.json"
+        bad_profile.write_text(json.dumps(base))
+        result = subprocess.run(
+            [sys.executable, str(builder_script),
+             "--profile", str(bad_profile),
+             "--csv", str(fixture_csv_path)],
+            capture_output=True, text=True, env=subprocess_env,
+            timeout=BUILDER_TIMEOUT_SECONDS,
+        )
+        assert result.returncode != 0
+        combined = result.stderr + result.stdout
+        assert "Traceback" not in combined
+        assert "search_filters" in combined.lower()
+
+    def test_profile_search_filters_missing_key(
+        self,
+        tmp_path: Path,
+        builder_script: Path,
+        fixture_csv_path: Path,
+        fixture_profile_path: Path,
+        subprocess_env: dict,
+    ):
+        """Profile with search_filters missing a required key gives a clear error."""
+        import json
+        base = json.loads(fixture_profile_path.read_text())
+        del base["search_filters"]["max_price"]
+        bad_profile = tmp_path / "bad-search-filters-key.json"
+        bad_profile.write_text(json.dumps(base))
+        result = subprocess.run(
+            [sys.executable, str(builder_script),
+             "--profile", str(bad_profile),
+             "--csv", str(fixture_csv_path)],
+            capture_output=True, text=True, env=subprocess_env,
+            timeout=BUILDER_TIMEOUT_SECONDS,
+        )
+        assert result.returncode != 0
+        combined = result.stderr + result.stdout
+        assert "Traceback" not in combined
+        assert "max_price" in combined
+
+    def test_profile_generation_missing_year_from(
+        self,
+        tmp_path: Path,
+        builder_script: Path,
+        fixture_csv_path: Path,
+        fixture_profile_path: Path,
+        subprocess_env: dict,
+    ):
+        """Profile with a generation missing 'year_from' gives a clear error."""
+        import json
+        base = json.loads(fixture_profile_path.read_text())
+        del base["generations"][0]["year_from"]
+        bad_profile = tmp_path / "bad-gen-year.json"
+        bad_profile.write_text(json.dumps(base))
+        result = subprocess.run(
+            [sys.executable, str(builder_script),
+             "--profile", str(bad_profile),
+             "--csv", str(fixture_csv_path)],
+            capture_output=True, text=True, env=subprocess_env,
+            timeout=BUILDER_TIMEOUT_SECONDS,
+        )
+        assert result.returncode != 0
+        combined = result.stderr + result.stdout
+        assert "Traceback" not in combined
+        assert "year_from" in combined
+
     def test_profile_spec_option_missing_weight(
         self,
         tmp_path: Path,
