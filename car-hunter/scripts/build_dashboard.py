@@ -73,6 +73,46 @@ def load_profile(path):
             f"See car-profile-schema.md for the expected format."
         )
 
+    # dashboard.theme sub-keys
+    _REQUIRED_THEME_KEYS = ("bg", "card_bg", "card_border", "text", "text_muted")
+    _theme = profile["dashboard"].get("theme", {})
+    if not isinstance(_theme, dict):
+        raise SystemExit(
+            f"Profile {path}: dashboard.theme must be an object, got {type(_theme).__name__}"
+        )
+    _missing_theme = [k for k in _REQUIRED_THEME_KEYS if k not in _theme]
+    if _missing_theme:
+        raise SystemExit(
+            f"Profile {path}: dashboard.theme is missing keys: {', '.join(_missing_theme)}. "
+            f"See car-profile-schema.md for the expected format."
+        )
+
+    # Per-variant shape
+    _REQUIRED_VARIANT_KEYS = ("name", "tier", "colour")
+    for i, v in enumerate(profile["variants"]):
+        if not isinstance(v, dict):
+            raise SystemExit(
+                f"Profile {path}: variants[{i}] must be an object, got {type(v).__name__}"
+            )
+        _missing_v = [k for k in _REQUIRED_VARIANT_KEYS if k not in v]
+        if _missing_v:
+            raise SystemExit(
+                f"Profile {path}: variants[{i}] is missing keys: {', '.join(_missing_v)}"
+            )
+
+    # Per-spec shape
+    _REQUIRED_SPEC_KEYS = ("key", "label", "weight")
+    for i, s in enumerate(profile["spec_options"]):
+        if not isinstance(s, dict):
+            raise SystemExit(
+                f"Profile {path}: spec_options[{i}] must be an object, got {type(s).__name__}"
+            )
+        _missing_s = [k for k in _REQUIRED_SPEC_KEYS if k not in s]
+        if _missing_s:
+            raise SystemExit(
+                f"Profile {path}: spec_options[{i}] is missing keys: {', '.join(_missing_s)}"
+            )
+
     variants = profile["variants"]
     generations = profile["generations"]
 

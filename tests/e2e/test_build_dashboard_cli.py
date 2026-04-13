@@ -203,6 +203,84 @@ class TestBuilderFailsHelpfully:
         assert "Traceback" not in combined
         assert "not found" in combined.lower() or "no such file" in combined.lower()
 
+    def test_profile_missing_theme_subkey(
+        self,
+        tmp_path: Path,
+        builder_script: Path,
+        fixture_csv_path: Path,
+        fixture_profile_path: Path,
+        subprocess_env: dict,
+    ):
+        """Profile whose dashboard.theme is missing a key gives a clear error."""
+        import json
+        base = json.loads(fixture_profile_path.read_text())
+        del base["dashboard"]["theme"]["text_muted"]
+        bad_profile = tmp_path / "bad-theme.json"
+        bad_profile.write_text(json.dumps(base))
+        result = subprocess.run(
+            [sys.executable, str(builder_script),
+             "--profile", str(bad_profile),
+             "--csv", str(fixture_csv_path)],
+            capture_output=True, text=True, env=subprocess_env,
+            timeout=BUILDER_TIMEOUT_SECONDS,
+        )
+        assert result.returncode != 0
+        combined = result.stderr + result.stdout
+        assert "Traceback" not in combined
+        assert "text_muted" in combined or "theme" in combined.lower()
+
+    def test_profile_variant_missing_tier(
+        self,
+        tmp_path: Path,
+        builder_script: Path,
+        fixture_csv_path: Path,
+        fixture_profile_path: Path,
+        subprocess_env: dict,
+    ):
+        """Profile with a variant missing 'tier' gives a clear error."""
+        import json
+        base = json.loads(fixture_profile_path.read_text())
+        del base["variants"][0]["tier"]
+        bad_profile = tmp_path / "bad-variant.json"
+        bad_profile.write_text(json.dumps(base))
+        result = subprocess.run(
+            [sys.executable, str(builder_script),
+             "--profile", str(bad_profile),
+             "--csv", str(fixture_csv_path)],
+            capture_output=True, text=True, env=subprocess_env,
+            timeout=BUILDER_TIMEOUT_SECONDS,
+        )
+        assert result.returncode != 0
+        combined = result.stderr + result.stdout
+        assert "Traceback" not in combined
+        assert "tier" in combined.lower()
+
+    def test_profile_spec_option_missing_weight(
+        self,
+        tmp_path: Path,
+        builder_script: Path,
+        fixture_csv_path: Path,
+        fixture_profile_path: Path,
+        subprocess_env: dict,
+    ):
+        """Profile with a spec option missing 'weight' gives a clear error."""
+        import json
+        base = json.loads(fixture_profile_path.read_text())
+        del base["spec_options"][0]["weight"]
+        bad_profile = tmp_path / "bad-spec.json"
+        bad_profile.write_text(json.dumps(base))
+        result = subprocess.run(
+            [sys.executable, str(builder_script),
+             "--profile", str(bad_profile),
+             "--csv", str(fixture_csv_path)],
+            capture_output=True, text=True, env=subprocess_env,
+            timeout=BUILDER_TIMEOUT_SECONDS,
+        )
+        assert result.returncode != 0
+        combined = result.stderr + result.stdout
+        assert "Traceback" not in combined
+        assert "weight" in combined.lower()
+
     def test_profile_missing_required_key(
         self,
         tmp_path: Path,
