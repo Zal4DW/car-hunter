@@ -555,7 +555,11 @@ def load_snapshots(csv_dir, profile_name):
                 f"price values, excluded from median"
             )
         prices.sort()
-        median = prices[len(prices) // 2] if prices else 0
+        if not prices:
+            median = 0
+        else:
+            mid = len(prices) // 2
+            median = prices[mid] if len(prices) % 2 else (prices[mid - 1] + prices[mid]) / 2
         snapshots.append({
             "date": snap_date,
             "path": path,
