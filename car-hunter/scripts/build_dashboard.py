@@ -200,13 +200,8 @@ def run_regression(rows, variant_by_name, tier_features):
     return coeffs, r_squared, reg_data, warning
 
 
-def enrich_rows(rows, snapshots, watchlist, listing_ids, price_changes, lid_encoding, today, has_listing_ids):
-    """Add composite keys, AutoTrader URLs, days-on-market, price changes, watchlist stars.
-
-    Mutates rows in place. Returns the SNAPSHOT_PULSE summary dict used by Market Pulse.
-    """
-    pulse = {"new": 0, "removed": 0, "price_drops": 0, "previous_date": None}
-
+def _init_enrichment_fields(rows):
+    """Set every row's enrichment columns to their default values."""
     for row in rows:
         row["composite_key"] = f"{row['price']}_{row['location']}"
         row["autotrader_url"] = None
@@ -215,57 +210,85 @@ def enrich_rows(rows, snapshots, watchlist, listing_ids, price_changes, lid_enco
         row["watched"] = False
         row["watch_note"] = ""
 
+
+def _enrich_with_listing_ids(rows, snapshots, watchlist, lid_encoding, today):
+    """Snapshot-driven enrichment path (CSV has listing_id column).
+
+    Populates autotrader_url/days_on_market from encoded IDs, diffs against
+    the most recent prior snapshot for price_change, joins the watchlist,
+    and returns the SNAPSHOT_PULSE dict for Market Pulse.
+    """
+    pulse = {"new": 0, "removed": 0, "price_drops": 0, "previous_date": None}
+    rows_by_id = {r["listing_id"]: r for r in rows if r["listing_id"]}
+
+    for row in rows:
+        lid = row["listing_id"]
+        if not lid:
+            continue
+        if lid_encoding.get("enabled") and lid.isdigit():
+            row["autotrader_url"] = f"https://www.autotrader.co.uk/car-details/{lid}"
+            ld = parse_listing_date(lid)
+            if ld:
+                row["days_on_market"] = (today - ld).days
+
+    today_snap = next((s for s in snapshots if s["date"] == today), None)
+    prior = [s for s in snapshots if s["date"] < today]
+    if today_snap and prior:
+        prev = prior[-1]
+        diff = snapshot_diff(
+            [{"listing_id": r.get("listing_id", ""), "price": safe_int_price(r.get("price")) or 0} for r in prev["rows"]],
+            [{"listing_id": r.get("listing_id", ""), "price": safe_int_price(r.get("price")) or 0} for r in today_snap["rows"]],
+        )
+        for ch in diff["price_changed"]:
+            r = rows_by_id.get(ch["id"])
+            if r is not None:
+                r["price_change"] = ch["delta"]
+        pulse = {
+            "new": len(diff["new"]),
+            "removed": len(diff["removed"]),
+            "price_drops": sum(1 for c in diff["price_changed"] if c["delta"] < 0),
+            "previous_date": prev["date"].isoformat(),
+        }
+        print(
+            f"Snapshot diff vs {prev['date'].isoformat()}: "
+            f"+{pulse['new']} new, -{pulse['removed']} removed, "
+            f"{pulse['price_drops']} price drops"
+        )
+
+    wl = watchlist["listings"]
+    for row in rows:
+        if row["listing_id"] in wl:
+            row["watched"] = True
+            entry = wl[row["listing_id"]]
+            row["watch_note"] = entry.get("note", "") if isinstance(entry, dict) else ""
+
+    return pulse
+
+
+def _enrich_with_legacy_sidecar(rows, listing_ids, price_changes, lid_encoding, today):
+    """Legacy composite-key sidecar path (CSV has no listing_id column)."""
+    for row in rows:
+        key = row["composite_key"]
+        lid = listing_ids.get(key)
+        if lid and lid_encoding.get("enabled"):
+            row["autotrader_url"] = f"https://www.autotrader.co.uk/car-details/{lid}"
+            ld = parse_listing_date(lid)
+            row["days_on_market"] = (today - ld).days if ld else None
+        row["price_change"] = price_changes.get(key, 0)
+
+
+def enrich_rows(rows, snapshots, watchlist, listing_ids, price_changes, lid_encoding, today, has_listing_ids):
+    """Add composite keys, AutoTrader URLs, days-on-market, price changes, watchlist stars.
+
+    Mutates rows in place. Returns the SNAPSHOT_PULSE summary dict used by Market Pulse.
+    Dispatches to the listing-id snapshot path or the legacy composite-key
+    sidecar path based on `has_listing_ids`.
+    """
+    _init_enrichment_fields(rows)
     if has_listing_ids:
-        rows_by_id = {r["listing_id"]: r for r in rows if r["listing_id"]}
-
-        for row in rows:
-            lid = row["listing_id"]
-            if not lid:
-                continue
-            if lid_encoding.get("enabled") and lid.isdigit():
-                row["autotrader_url"] = f"https://www.autotrader.co.uk/car-details/{lid}"
-                ld = parse_listing_date(lid)
-                if ld:
-                    row["days_on_market"] = (today - ld).days
-
-        today_snap = next((s for s in snapshots if s["date"] == today), None)
-        prior = [s for s in snapshots if s["date"] < today]
-        if today_snap and prior:
-            prev = prior[-1]
-            diff = snapshot_diff(
-                [{"listing_id": r.get("listing_id", ""), "price": safe_int_price(r.get("price")) or 0} for r in prev["rows"]],
-                [{"listing_id": r.get("listing_id", ""), "price": safe_int_price(r.get("price")) or 0} for r in today_snap["rows"]],
-            )
-            for ch in diff["price_changed"]:
-                r = rows_by_id.get(ch["id"])
-                if r is not None:
-                    r["price_change"] = ch["delta"]
-            pulse = {
-                "new": len(diff["new"]),
-                "removed": len(diff["removed"]),
-                "price_drops": sum(1 for c in diff["price_changed"] if c["delta"] < 0),
-                "previous_date": prev["date"].isoformat(),
-            }
-            print(
-                f"Snapshot diff vs {prev['date'].isoformat()}: "
-                f"+{pulse['new']} new, -{pulse['removed']} removed, "
-                f"{pulse['price_drops']} price drops"
-            )
-
-        wl = watchlist["listings"]
-        for row in rows:
-            if row["listing_id"] in wl:
-                row["watched"] = True
-                row["watch_note"] = wl[row["listing_id"]].get("note", "") if isinstance(wl[row["listing_id"]], dict) else ""
-    else:
-        for row in rows:
-            key = row["composite_key"]
-            lid = listing_ids.get(key)
-            if lid and lid_encoding.get("enabled"):
-                row["autotrader_url"] = f"https://www.autotrader.co.uk/car-details/{lid}"
-                ld = parse_listing_date(lid)
-                row["days_on_market"] = (today - ld).days if ld else None
-            row["price_change"] = price_changes.get(key, 0)
+        return _enrich_with_listing_ids(rows, snapshots, watchlist, lid_encoding, today)
+    _enrich_with_legacy_sidecar(rows, listing_ids, price_changes, lid_encoding, today)
+    return {"new": 0, "removed": 0, "price_drops": 0, "previous_date": None}
 
     return pulse
 
