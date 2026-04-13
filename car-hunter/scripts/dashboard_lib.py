@@ -304,17 +304,22 @@ def build_tier_features(variants):
     """Build the tier dummy-variable feature list for the regression.
 
     Only variants with `tier > 0` contribute a dummy column; tier 0 is
-    the reference category absorbed into the intercept. Returns a list
-    of `{name, tier, variant_name}` dicts in variant iteration order.
+    the reference category absorbed into the intercept. When multiple
+    variants share a tier, only the first-seen variant contributes a
+    column - otherwise the regression matrix picks up duplicate columns
+    and becomes artificially singular.
     """
     features = []
+    seen_tiers = set()
     for v in variants:
-        if v["tier"] > 0:
+        tier = v["tier"]
+        if tier > 0 and tier not in seen_tiers:
             features.append({
-                "name": f"is_tier_{v['tier']}",
-                "tier": v["tier"],
+                "name": f"is_tier_{tier}",
+                "tier": tier,
                 "variant_name": v["name"],
             })
+            seen_tiers.add(tier)
     return features
 
 
