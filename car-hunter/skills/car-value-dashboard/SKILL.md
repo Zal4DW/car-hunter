@@ -2,10 +2,13 @@
 name: car-value-dashboard
 description: >
   Build or update an interactive depreciation analysis dashboard for car listings.
-  Use when the user asks to "update the dashboard", "rebuild the depreciation dashboard",
-  "analyse car values", "show me the depreciation curve", "update car value analysis",
-  "build the dashboard", or any request related to analysing pricing, depreciation,
-  or value retention for a tracked car. Config-driven: reads the active car profile.
+  This skill should be used when the user asks to "update the dashboard",
+  "rebuild the depreciation dashboard", "analyse car values",
+  "show me the depreciation curve", "update car value analysis",
+  "build the dashboard", "show me the deals", "which cars are good value",
+  "what's the best value [car name]", "find undervalued cars", or any
+  request related to analysing pricing, depreciation, or value retention
+  for a tracked car. Config-driven: reads the active car profile.
 version: 1.0.0
 ---
 

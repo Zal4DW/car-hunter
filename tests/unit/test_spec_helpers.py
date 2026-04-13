@@ -63,14 +63,11 @@ class TestRetainedPct:
         """Computes percentage rounded to one decimal."""
         assert retained_pct(30000, 45000) == pytest.approx(66.7)
 
-    def test_returns_zero_when_new_price_missing(self):
-        """Returns zero when new price missing."""
-        assert retained_pct(30000, 0) == 0
-        assert retained_pct(30000, None) == 0
-
-    def test_negative_new_price_returns_zero(self):
-        """Negative new price returns zero."""
-        assert retained_pct(30000, -1000) == 0
+    def test_returns_none_when_new_price_unknown(self):
+        """Returns None when new price is zero, None, or negative."""
+        assert retained_pct(30000, 0) is None
+        assert retained_pct(30000, None) is None
+        assert retained_pct(30000, -1000) is None
 
     def test_full_retention_returns_one_hundred(self):
         """Full retention returns one hundred."""

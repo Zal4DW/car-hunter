@@ -3,8 +3,11 @@ name: setup-car-profile
 description: >
   This skill should be used when the user asks to "set up a car search",
   "create a car profile", "add a new car to track", "configure car hunter",
-  "set up car-hunter", "I want to search for a [car name]", or any request
-  to configure which car model they want to track on the used market.
+  "set up car-hunter", "edit my car profile", "change my search preferences",
+  "update my car profile", "I want to search for a [car name]", or any
+  request to configure which car model they want to track on the used market.
+  Creates or updates a car profile JSON that configures all other car-hunter
+  skills - search, dashboard, and analysis.
 version: 1.0.0
 ---
 

@@ -9,6 +9,7 @@ venv/
 .coverage_cache/
 coverage.xml
 htmlcov/
+*.egg-info/
 .mypy_cache/
 .ruff_cache/
 
@@ -22,3 +23,4 @@ Thumbs.db
 # User-generated search artefacts (live in the user's workspace, not the plugin)
 *-searches/
 .claude/scheduled_tasks.lock
+car_hunter_tests.egg-info

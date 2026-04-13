@@ -127,7 +127,7 @@ class TestBuilderFailsHelpfully:
         fixture_csv_path: Path,
         subprocess_env: dict,
     ):
-        """Missing profile returns nonzero."""
+        """Missing profile returns nonzero with a helpful message, not a raw traceback."""
         result = subprocess.run(
             [
                 sys.executable,
@@ -143,6 +143,38 @@ class TestBuilderFailsHelpfully:
             timeout=BUILDER_TIMEOUT_SECONDS,
         )
         assert result.returncode != 0
+        combined = result.stderr + result.stdout
+        assert "Traceback" not in combined
+        assert "not found" in combined.lower() or "no such file" in combined.lower()
+
+    def test_malformed_json_profile(
+        self,
+        tmp_path: Path,
+        builder_script: Path,
+        fixture_csv_path: Path,
+        subprocess_env: dict,
+    ):
+        """Profile with invalid JSON gives a clear error, not a raw traceback."""
+        bad_profile = tmp_path / "corrupt.json"
+        bad_profile.write_text("{not json,")
+        result = subprocess.run(
+            [
+                sys.executable,
+                str(builder_script),
+                "--profile",
+                str(bad_profile),
+                "--csv",
+                str(fixture_csv_path),
+            ],
+            capture_output=True,
+            text=True,
+            env=subprocess_env,
+            timeout=BUILDER_TIMEOUT_SECONDS,
+        )
+        assert result.returncode != 0
+        combined = result.stderr + result.stdout
+        assert "Traceback" not in combined
+        assert "not valid json" in combined.lower() or "invalid json" in combined.lower()
 
     def test_missing_csv_returns_nonzero(
         self,
@@ -151,7 +183,7 @@ class TestBuilderFailsHelpfully:
         fixture_profile_path: Path,
         subprocess_env: dict,
     ):
-        """Missing csv returns nonzero."""
+        """Missing csv returns nonzero with a helpful message, not a raw traceback."""
         result = subprocess.run(
             [
                 sys.executable,
@@ -167,6 +199,380 @@ class TestBuilderFailsHelpfully:
             timeout=BUILDER_TIMEOUT_SECONDS,
         )
         assert result.returncode != 0
+        combined = result.stderr + result.stdout
+        assert "Traceback" not in combined
+        assert "not found" in combined.lower() or "no such file" in combined.lower()
+
+    def test_profile_generations_not_a_list(
+        self,
+        tmp_path: Path,
+        builder_script: Path,
+        fixture_csv_path: Path,
+        fixture_profile_path: Path,
+        subprocess_env: dict,
+    ):
+        """Profile with non-list generations gives a clear error, not AttributeError."""
+        import json
+        base = json.loads(fixture_profile_path.read_text())
+        base["generations"] = "not a list"
+        bad_profile = tmp_path / "bad-gens.json"
+        bad_profile.write_text(json.dumps(base))
+        result = subprocess.run(
+            [sys.executable, str(builder_script),
+             "--profile", str(bad_profile),
+             "--csv", str(fixture_csv_path)],
+            capture_output=True, text=True, env=subprocess_env,
+            timeout=BUILDER_TIMEOUT_SECONDS,
+        )
+        assert result.returncode != 0
+        combined = result.stderr + result.stdout
+        assert "Traceback" not in combined
+        assert "generations" in combined.lower()
+
+    def test_profile_dashboard_not_a_dict(
+        self,
+        tmp_path: Path,
+        builder_script: Path,
+        fixture_csv_path: Path,
+        fixture_profile_path: Path,
+        subprocess_env: dict,
+    ):
+        """Profile with non-dict dashboard gives a clear error."""
+        import json
+        base = json.loads(fixture_profile_path.read_text())
+        base["dashboard"] = "should be a dict"
+        bad_profile = tmp_path / "bad-dashboard.json"
+        bad_profile.write_text(json.dumps(base))
+        result = subprocess.run(
+            [sys.executable, str(builder_script),
+             "--profile", str(bad_profile),
+             "--csv", str(fixture_csv_path)],
+            capture_output=True, text=True, env=subprocess_env,
+            timeout=BUILDER_TIMEOUT_SECONDS,
+        )
+        assert result.returncode != 0
+        combined = result.stderr + result.stdout
+        assert "Traceback" not in combined
+        assert "dashboard" in combined.lower()
+
+    def test_profile_missing_theme_subkey(
+        self,
+        tmp_path: Path,
+        builder_script: Path,
+        fixture_csv_path: Path,
+        fixture_profile_path: Path,
+        subprocess_env: dict,
+    ):
+        """Profile whose dashboard.theme is missing a key gives a clear error."""
+        import json
+        base = json.loads(fixture_profile_path.read_text())
+        del base["dashboard"]["theme"]["text_muted"]
+        bad_profile = tmp_path / "bad-theme.json"
+        bad_profile.write_text(json.dumps(base))
+        result = subprocess.run(
+            [sys.executable, str(builder_script),
+             "--profile", str(bad_profile),
+             "--csv", str(fixture_csv_path)],
+            capture_output=True, text=True, env=subprocess_env,
+            timeout=BUILDER_TIMEOUT_SECONDS,
+        )
+        assert result.returncode != 0
+        combined = result.stderr + result.stdout
+        assert "Traceback" not in combined
+        assert "text_muted" in combined or "theme" in combined.lower()
+
+    def test_profile_variant_missing_tier(
+        self,
+        tmp_path: Path,
+        builder_script: Path,
+        fixture_csv_path: Path,
+        fixture_profile_path: Path,
+        subprocess_env: dict,
+    ):
+        """Profile with a variant missing 'tier' gives a clear error."""
+        import json
+        base = json.loads(fixture_profile_path.read_text())
+        del base["variants"][0]["tier"]
+        bad_profile = tmp_path / "bad-variant.json"
+        bad_profile.write_text(json.dumps(base))
+        result = subprocess.run(
+            [sys.executable, str(builder_script),
+             "--profile", str(bad_profile),
+             "--csv", str(fixture_csv_path)],
+            capture_output=True, text=True, env=subprocess_env,
+            timeout=BUILDER_TIMEOUT_SECONDS,
+        )
+        assert result.returncode != 0
+        combined = result.stderr + result.stdout
+        assert "Traceback" not in combined
+        assert "tier" in combined.lower()
+
+    def test_profile_search_filters_not_a_dict(
+        self,
+        tmp_path: Path,
+        builder_script: Path,
+        fixture_csv_path: Path,
+        fixture_profile_path: Path,
+        subprocess_env: dict,
+    ):
+        """Profile with non-dict search_filters gives a clear error, not AttributeError."""
+        import json
+        base = json.loads(fixture_profile_path.read_text())
+        base["search_filters"] = ["not", "a", "dict"]
+        bad_profile = tmp_path / "bad-search-filters.json"
+        bad_profile.write_text(json.dumps(base))
+        result = subprocess.run(
+            [sys.executable, str(builder_script),
+             "--profile", str(bad_profile),
+             "--csv", str(fixture_csv_path)],
+            capture_output=True, text=True, env=subprocess_env,
+            timeout=BUILDER_TIMEOUT_SECONDS,
+        )
+        assert result.returncode != 0
+        combined = result.stderr + result.stdout
+        assert "Traceback" not in combined
+        assert "search_filters" in combined.lower()
+
+    def test_profile_search_filters_missing_key(
+        self,
+        tmp_path: Path,
+        builder_script: Path,
+        fixture_csv_path: Path,
+        fixture_profile_path: Path,
+        subprocess_env: dict,
+    ):
+        """Profile with search_filters missing a required key gives a clear error."""
+        import json
+        base = json.loads(fixture_profile_path.read_text())
+        del base["search_filters"]["max_price"]
+        bad_profile = tmp_path / "bad-search-filters-key.json"
+        bad_profile.write_text(json.dumps(base))
+        result = subprocess.run(
+            [sys.executable, str(builder_script),
+             "--profile", str(bad_profile),
+             "--csv", str(fixture_csv_path)],
+            capture_output=True, text=True, env=subprocess_env,
+            timeout=BUILDER_TIMEOUT_SECONDS,
+        )
+        assert result.returncode != 0
+        combined = result.stderr + result.stdout
+        assert "Traceback" not in combined
+        assert "max_price" in combined
+
+    def test_profile_generation_missing_year_from(
+        self,
+        tmp_path: Path,
+        builder_script: Path,
+        fixture_csv_path: Path,
+        fixture_profile_path: Path,
+        subprocess_env: dict,
+    ):
+        """Profile with a generation missing 'year_from' gives a clear error."""
+        import json
+        base = json.loads(fixture_profile_path.read_text())
+        del base["generations"][0]["year_from"]
+        bad_profile = tmp_path / "bad-gen-year.json"
+        bad_profile.write_text(json.dumps(base))
+        result = subprocess.run(
+            [sys.executable, str(builder_script),
+             "--profile", str(bad_profile),
+             "--csv", str(fixture_csv_path)],
+            capture_output=True, text=True, env=subprocess_env,
+            timeout=BUILDER_TIMEOUT_SECONDS,
+        )
+        assert result.returncode != 0
+        combined = result.stderr + result.stdout
+        assert "Traceback" not in combined
+        assert "year_from" in combined
+
+    def test_profile_spec_option_missing_weight(
+        self,
+        tmp_path: Path,
+        builder_script: Path,
+        fixture_csv_path: Path,
+        fixture_profile_path: Path,
+        subprocess_env: dict,
+    ):
+        """Profile with a spec option missing 'weight' gives a clear error."""
+        import json
+        base = json.loads(fixture_profile_path.read_text())
+        del base["spec_options"][0]["weight"]
+        bad_profile = tmp_path / "bad-spec.json"
+        bad_profile.write_text(json.dumps(base))
+        result = subprocess.run(
+            [sys.executable, str(builder_script),
+             "--profile", str(bad_profile),
+             "--csv", str(fixture_csv_path)],
+            capture_output=True, text=True, env=subprocess_env,
+            timeout=BUILDER_TIMEOUT_SECONDS,
+        )
+        assert result.returncode != 0
+        combined = result.stderr + result.stdout
+        assert "Traceback" not in combined
+        assert "weight" in combined.lower()
+
+    def test_profile_missing_required_key(
+        self,
+        tmp_path: Path,
+        builder_script: Path,
+        fixture_csv_path: Path,
+        subprocess_env: dict,
+    ):
+        """Profile missing a required key gives a clear error message."""
+        import json
+
+        bad_profile = tmp_path / "bad-profile.json"
+        bad_profile.write_text(json.dumps({
+            "profile_name": "test",
+            "display_name": "Test",
+            # "variants" deliberately omitted
+            "generations": [],
+            "spec_options": [],
+            "search_filters": {},
+            "dashboard": {},
+        }))
+        result = subprocess.run(
+            [
+                sys.executable,
+                str(builder_script),
+                "--profile",
+                str(bad_profile),
+                "--csv",
+                str(fixture_csv_path),
+            ],
+            capture_output=True,
+            text=True,
+            env=subprocess_env,
+            timeout=BUILDER_TIMEOUT_SECONDS,
+        )
+        assert result.returncode != 0
+        combined = result.stderr + result.stdout
+        # Must be a clear message, not a raw KeyError traceback
+        assert "missing required" in combined.lower()
+        assert "variants" in combined
+
+    def test_csv_missing_required_column(
+        self,
+        tmp_path: Path,
+        builder_script: Path,
+        fixture_profile_path: Path,
+        subprocess_env: dict,
+    ):
+        """CSV missing a required column gives a clear error message."""
+        bad_csv = tmp_path / "bad.csv"
+        bad_csv.write_text("variant,year,mileage\nBolt Base,2023,15000\n")
+        result = subprocess.run(
+            [
+                sys.executable,
+                str(builder_script),
+                "--profile",
+                str(fixture_profile_path),
+                "--csv",
+                str(bad_csv),
+            ],
+            capture_output=True,
+            text=True,
+            env=subprocess_env,
+            timeout=BUILDER_TIMEOUT_SECONDS,
+        )
+        assert result.returncode != 0
+        combined = result.stderr + result.stdout
+        assert "missing required" in combined.lower()
+        assert "price" in combined
+
+    def test_csv_row_with_non_numeric_price(
+        self,
+        tmp_path: Path,
+        builder_script: Path,
+        fixture_profile_path: Path,
+        subprocess_env: dict,
+    ):
+        """CSV row with non-numeric price gives a clear error naming the row and field."""
+        bad_csv = tmp_path / "bad-row.csv"
+        bad_csv.write_text(
+            "variant,price,year,mileage\n"
+            "Bolt Base,35000,2023,15000\n"
+            "Bolt Sport,TBC,2024,10000\n"
+        )
+        result = subprocess.run(
+            [
+                sys.executable,
+                str(builder_script),
+                "--profile",
+                str(fixture_profile_path),
+                "--csv",
+                str(bad_csv),
+            ],
+            capture_output=True,
+            text=True,
+            env=subprocess_env,
+            timeout=BUILDER_TIMEOUT_SECONDS,
+        )
+        assert result.returncode != 0
+        combined = result.stderr + result.stdout
+        assert "row 2" in combined.lower() or "row 2" in combined
+        assert "TBC" in combined
+
+    def test_bad_date_argument(
+        self,
+        tmp_path: Path,
+        builder_script: Path,
+        fixture_profile_path: Path,
+        fixture_csv_path: Path,
+        subprocess_env: dict,
+    ):
+        """Invalid --date gives a clear error, not a raw ValueError traceback."""
+        result = subprocess.run(
+            [
+                sys.executable,
+                str(builder_script),
+                "--profile",
+                str(fixture_profile_path),
+                "--csv",
+                str(fixture_csv_path),
+                "--date",
+                "yesterday",
+            ],
+            capture_output=True,
+            text=True,
+            env=subprocess_env,
+            timeout=BUILDER_TIMEOUT_SECONDS,
+        )
+        assert result.returncode != 0
+        combined = result.stderr + result.stdout
+        assert "Traceback" not in combined
+        assert "--date" in combined or "YYYY-MM-DD" in combined
+
+    def test_malformed_listing_state_json(
+        self,
+        tmp_path: Path,
+        builder_script: Path,
+        fixture_profile_path: Path,
+        fixture_csv_path: Path,
+        subprocess_env: dict,
+    ):
+        """Corrupt listing-state JSON gives a clear error, not a raw traceback."""
+        bad_state = tmp_path / "bad-state.json"
+        bad_state.write_text("{not json")
+        result = subprocess.run(
+            [
+                sys.executable,
+                str(builder_script),
+                "--profile",
+                str(fixture_profile_path),
+                "--csv",
+                str(fixture_csv_path),
+                "--listing-state",
+                str(bad_state),
+            ],
+            capture_output=True,
+            text=True,
+            env=subprocess_env,
+            timeout=BUILDER_TIMEOUT_SECONDS,
+        )
+        assert result.returncode != 0
+        combined = result.stderr + result.stdout
+        assert "listing state" in combined.lower() or "invalid json" in combined.lower()
 
 
 class TestBuilderEdgeCases:
@@ -204,6 +610,66 @@ class TestBuilderEdgeCases:
         )
         return result, output_html
 
+    def test_skipped_snapshots_produce_warnings(
+        self,
+        tmp_path: Path,
+        builder_script: Path,
+        fixture_profile_path: Path,
+        fixture_csv_path: Path,
+        subprocess_env: dict,
+    ):
+        """Snapshot files that can't be used must produce visible warnings.
+
+        Silently dropping a snapshot is how users lose data without knowing.
+        Skipped files must be named in stdout.
+        """
+        # Simulate a user workspace by copying the fixture CSV with the expected
+        # dated filename, plus two bad siblings.
+        workspace = tmp_path / "workspace"
+        workspace.mkdir()
+        profile_name = "acme-bolt"
+
+        # Today's snapshot (needed for the builder to find a usable one)
+        today_csv = workspace / f"{profile_name}-all-listings-2026-04-10.csv"
+        today_csv.write_text(fixture_csv_path.read_text())
+
+        # Bad date: Feb 30
+        bad_date_csv = workspace / f"{profile_name}-all-listings-2026-02-30.csv"
+        bad_date_csv.write_text(fixture_csv_path.read_text())
+
+        # No listing_id column
+        no_id_csv = workspace / f"{profile_name}-all-listings-2026-03-15.csv"
+        no_id_csv.write_text("variant,price,year,mileage\nBolt Base,35000,2023,15000\n")
+
+        output_html = workspace / f"{profile_name}-dashboard.html"
+        result = subprocess.run(
+            [
+                sys.executable,
+                str(builder_script),
+                "--profile",
+                str(fixture_profile_path),
+                "--csv",
+                str(today_csv),
+                "--output",
+                str(output_html),
+                "--date",
+                "2026-04-10",
+            ],
+            capture_output=True,
+            text=True,
+            env=subprocess_env,
+            timeout=BUILDER_TIMEOUT_SECONDS,
+        )
+        assert result.returncode == 0, f"builder failed: {result.stderr}"
+        combined = result.stderr + result.stdout
+        # Both skipped files should be named in a warning so the user knows.
+        assert "2026-02-30" in combined, (
+            "Feb 30 snapshot must be reported as skipped, not silently dropped"
+        )
+        assert "2026-03-15" in combined, (
+            "snapshot without listing_id must be reported as skipped"
+        )
+
     def test_sparse_csv_triggers_regression_fallback(
         self,
         tmp_path: Path,
@@ -232,6 +698,12 @@ class TestBuilderEdgeCases:
         assert "WARNING: Not enough data for regression" in result.stdout
         assert output_html.exists()
         assert output_html.stat().st_size > 0
+        # The dashboard itself must surface the fallback - a stdout-only
+        # warning is invisible to anyone opening the HTML file.
+        html = output_html.read_text()
+        assert 'class="regression-warning"' in html or 'id="regression-warning"' in html, (
+            "fallback path must render a prominent regression-warning element"
+        )
 
     def test_multigen_profile_emits_generation_filter_js(
         self,

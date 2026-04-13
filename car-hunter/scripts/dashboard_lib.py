@@ -42,11 +42,15 @@ def ols_regression(X, y):
     """Ordinary least squares via normal equations with Gaussian elimination.
 
     Solves b = (X'X)^-1 X'y without any external libraries.
-    Returns (coefficients, r_squared). Uses partial pivoting for numerical
-    stability. Coefficients for singular/collinear columns are returned as
-    zero rather than raising.
+    Returns (coefficients, r_squared, singular_columns) where singular_columns
+    is a list of column indices whose pivot was numerically zero and whose
+    coefficients were therefore left at zero rather than solved for. Callers
+    should surface a warning when this list is non-empty so users know a
+    feature was effectively dropped from the model.
     """
     n = len(y)
+    if n == 0 or not X:
+        return [], 0, []
     k = len(X[0])
 
     XtX = [[0.0] * k for _ in range(k)]
@@ -61,11 +65,13 @@ def ols_regression(X, y):
             Xty[j] += X[i][j] * y[i]
 
     aug = [XtX[i][:] + [Xty[i]] for i in range(k)]
+    singular_columns = []
     for col in range(k):
         max_row = max(range(col, k), key=lambda r: abs(aug[r][col]))
         aug[col], aug[max_row] = aug[max_row], aug[col]
         pivot = aug[col][col]
         if abs(pivot) < 1e-12:
+            singular_columns.append(col)
             continue
         for j in range(col, k + 1):
             aug[col][j] /= pivot
@@ -86,7 +92,7 @@ def ols_regression(X, y):
     )
     r_squared = 1 - ss_res / ss_tot if ss_tot > 0 else 0
 
-    return coeffs, r_squared
+    return coeffs, r_squared, singular_columns
 
 
 def fit_poly2(points):
@@ -94,9 +100,11 @@ def fit_poly2(points):
 
     Returns the three polynomial coefficients [a, b, c].
     """
+    if not points:
+        return [0.0, 0.0, 0.0]
     X = [[1, p["age_months"], p["age_months"] ** 2] for p in points]
     y = [p["price"] for p in points]
-    coeffs, _ = ols_regression(X, y)
+    coeffs, _, _ = ols_regression(X, y)
     return coeffs
 
 
@@ -130,10 +138,10 @@ def get_tier_value(row, variant_by_name):
 def retained_pct(price, new_price):
     """Percentage of the original RRP retained at the current asking price.
 
-    Returns 0 when new_price is zero or missing to avoid divide-by-zero.
+    Returns None when new_price is zero, missing, or negative (unknown RRP).
     """
     if not new_price or new_price <= 0:
-        return 0
+        return None
     return round((price / new_price) * 100, 1)
 
 
@@ -278,6 +286,193 @@ def validate_watchlist(data, source="watchlist"):
     return {"listings": listings}
 
 
+def build_time_series(snapshots, today, days=28):
+    """Thin wrapper that extracts the fields rolling_window needs from the
+    builder's snapshot list and calls it. Returns [] for an empty snapshot
+    list so callers can hand the result straight to the template.
+    """
+    if not snapshots:
+        return []
+    dated = [
+        {"date": s["date"], "ids": s["ids"], "median_price": s["median_price"]}
+        for s in snapshots
+    ]
+    return rolling_window(dated, today, days=days)
+
+
+def build_tier_features(variants):
+    """Build the tier dummy-variable feature list for the regression.
+
+    Only variants with `tier > 0` contribute a dummy column; tier 0 is
+    the reference category absorbed into the intercept. When multiple
+    variants share a tier, only the first-seen variant contributes a
+    column - otherwise the regression matrix picks up duplicate columns
+    and becomes artificially singular.
+    """
+    features = []
+    seen_tiers = set()
+    for v in variants:
+        tier = v["tier"]
+        if tier > 0 and tier not in seen_tiers:
+            features.append({
+                "name": f"is_tier_{tier}",
+                "tier": tier,
+                "variant_name": v["name"],
+            })
+            seen_tiers.add(tier)
+    return features
+
+
+def compute_pm_trend(rows):
+    """Fit a linear trendline for price vs mileage over used listings.
+
+    Returns `(trend, singular_cols)` where `trend` is either a 2-point list
+    `[{x: min_mileage, y: predicted}, {x: max_mileage, y: predicted}]` or an
+    empty list when there are too few rows (<=5) or the mileage column is
+    singular. `singular_cols` is the raw list returned by ols_regression so
+    the caller can decide how to surface the warning.
+
+    Pure function: no prints, no logging. The caller decides what to do
+    with the singular flag.
+    """
+    if len(rows) <= 5:
+        return [], []
+    X = [[1, r["mileage"]] for r in rows]
+    y = [r["price"] for r in rows]
+    coeffs, _, singular = ols_regression(X, y)
+    if singular:
+        return [], singular
+    mileages = sorted(set(r["mileage"] for r in rows))
+    return [
+        {"x": min(mileages), "y": round(coeffs[0] + coeffs[1] * min(mileages))},
+        {"x": max(mileages), "y": round(coeffs[0] + coeffs[1] * max(mileages))},
+    ], []
+
+
+def compute_dep_curves(rows):
+    """Per-variant depreciation curve data for the dashboard.
+
+    Groups non-brand-new rows by variant, fits a quadratic y = a + bx + cx^2
+    via fit_poly2, samples 50 points along the observed age range, and
+    computes a flattening point where the slope drops to half the initial.
+
+    Variants with fewer than 5 rows are skipped (too few to fit reliably).
+    Returns `{variant_name: {points, curve, poly, flatten_month}}`.
+    """
+    grouped = {}
+    for r in rows:
+        if r.get("is_brand_new_stock"):
+            continue
+        v = r["variant"]
+        if v not in grouped:
+            grouped[v] = []
+        grouped[v].append({
+            "age_months": r["age_months"],
+            "price": r["price"],
+            "location": r.get("location", ""),
+            "mileage": r.get("mileage", 0),
+        })
+
+    curves = {}
+    for variant, points in grouped.items():
+        if len(points) < 5:
+            continue
+        poly = fit_poly2(points)
+        ages = sorted(set(p["age_months"] for p in points))
+        min_age = min(ages)
+        max_age = max(ages)
+        curve_points = []
+        step = max(1, (max_age - min_age) / 50)
+        a = min_age
+        while a <= max_age:
+            predicted = poly[0] + poly[1] * a + poly[2] * a * a
+            curve_points.append({"x": round(a, 1), "y": round(predicted)})
+            a += step
+
+        flatten_month = None
+        if abs(poly[2]) > 0.001:
+            flatten_month = round(-poly[1] / (4 * poly[2]), 0)
+            if flatten_month < min_age or flatten_month > max_age:
+                flatten_month = None
+
+        curves[variant] = {
+            "points": [
+                {"x": p["age_months"], "y": p["price"], "location": p["location"], "mileage": p["mileage"]}
+                for p in points
+            ],
+            "curve": curve_points,
+            "poly": poly,
+            "flatten_month": flatten_month,
+        }
+    return curves
+
+
+def compute_spec_premiums(reg_rows, spec_options):
+    """For each spec option, compute the average value-deviation delta
+    between rows with the spec present vs absent.
+
+    Each entry in the result is a dict with `label`, `premium`, `count_with`
+    and `count_without`. Entries with fewer than 3 rows on either side gain
+    an `insufficient: True` flag and a zero premium.
+    """
+    premiums = []
+    for spec in spec_options:
+        field = spec["key"]
+        label = spec["label"]
+        with_spec = [r["value_deviation"] for r in reg_rows if r.get(field)]
+        without_spec = [r["value_deviation"] for r in reg_rows if not r.get(field)]
+        entry = {
+            "label": label,
+            "count_with": len(with_spec),
+            "count_without": len(without_spec),
+        }
+        if len(with_spec) >= 3 and len(without_spec) >= 3:
+            avg_with = sum(with_spec) / len(with_spec)
+            avg_without = sum(without_spec) / len(without_spec)
+            entry["premium"] = round(avg_with - avg_without)
+        else:
+            entry["premium"] = 0
+            entry["insufficient"] = True
+        premiums.append(entry)
+    return premiums
+
+
+def safe_int_price(raw, context=""):
+    """Coerce a raw CSV price cell to int or return None for unparseable input.
+
+    Handles empty strings, None, and numeric-like strings including those with
+    commas (e.g. "12,995"). Unparseable garbage (e.g. "POA") returns None
+    rather than raising, so callers can filter and log rather than crash.
+    If `context` is supplied and a value is dropped, it is included in the
+    caller's own warning logic - this function never prints on its own.
+    """
+    if raw is None or raw == "":
+        return None
+    if isinstance(raw, (int, float)):
+        return int(raw)
+    cleaned = str(raw).replace(",", "").strip()
+    if not cleaned:
+        return None
+    try:
+        return int(cleaned)
+    except ValueError:
+        return None
+
+
+def row_to_features(row, variant_by_name, tier_features):
+    """Convert a row dict into the regression feature vector.
+
+    Layout: [intercept, age_months, mileage, spec_score, is_tier_1, is_tier_2, ...].
+    Used by both build_feature_matrix (training) and the builder's prediction loop,
+    so both sides stay in sync when a new feature is added.
+    """
+    tier = get_tier_value(row, variant_by_name)
+    features = [1, row["age_months"], row["mileage"], row["spec_score"]]
+    for tf in tier_features:
+        features.append(1 if tier == tf["tier"] else 0)
+    return features
+
+
 def build_feature_matrix(reg_rows, variant_by_name, tier_features):
     """Assemble the OLS feature matrix used by the depreciation regression.
 
@@ -288,10 +483,6 @@ def build_feature_matrix(reg_rows, variant_by_name, tier_features):
     X = []
     y = []
     for r in reg_rows:
-        tier = get_tier_value(r, variant_by_name)
-        features = [1, r["age_months"], r["mileage"], r["spec_score"]]
-        for tf in tier_features:
-            features.append(1 if tier == tf["tier"] else 0)
-        X.append(features)
+        X.append(row_to_features(r, variant_by_name, tier_features))
         y.append(r["price"])
     return X, y

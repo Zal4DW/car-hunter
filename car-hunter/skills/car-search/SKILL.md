@@ -3,9 +3,11 @@ name: car-search
 description: >
   This skill should be used when the user asks to "search for cars",
   "find me a [car name]", "what [car name]s are for sale", "search AutoTrader",
-  "update my car search", "run the car search", "look for cars", or any
-  request related to searching for used cars currently listed for sale in the UK.
-  Config-driven: reads a car profile to determine what to search for.
+  "update my car search", "run the car search", "look for cars",
+  "check for new listings", "any new cars today", "refresh the car search",
+  or any request related to searching for used cars currently listed for
+  sale in the UK. Config-driven: reads a car profile to determine what
+  to search for.
 version: 1.0.0
 context: fork
 allowed-tools:
