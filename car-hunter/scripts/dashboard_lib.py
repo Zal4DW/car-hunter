@@ -286,6 +286,33 @@ def validate_watchlist(data, source="watchlist"):
     return {"listings": listings}
 
 
+def compute_pm_trend(rows):
+    """Fit a linear trendline for price vs mileage over used listings.
+
+    Returns a 2-point list `[{x: min_mileage, y: predicted}, {x: max_mileage, y: predicted}]`
+    suitable for a straight line overlay, or `[]` when there are too few
+    rows (<=5) or the mileage column is singular (all identical values).
+    Prints a WARNING in the singular case so the user knows the scraper
+    may have failed to parse mileages.
+    """
+    if len(rows) <= 5:
+        return []
+    X = [[1, r["mileage"]] for r in rows]
+    y = [r["price"] for r in rows]
+    coeffs, _, singular = ols_regression(X, y)
+    if singular:
+        print(
+            f"WARNING: price-vs-mileage trendline degenerate "
+            f"(singular columns {singular}), suppressing"
+        )
+        return []
+    mileages = sorted(set(r["mileage"] for r in rows))
+    return [
+        {"x": min(mileages), "y": round(coeffs[0] + coeffs[1] * min(mileages))},
+        {"x": max(mileages), "y": round(coeffs[0] + coeffs[1] * max(mileages))},
+    ]
+
+
 def compute_dep_curves(rows):
     """Per-variant depreciation curve data for the dashboard.
 

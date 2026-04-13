@@ -33,6 +33,7 @@ from dashboard_lib import (  # noqa: E402
     retained_pct as _retained_pct,
     build_feature_matrix,
     compute_dep_curves,
+    compute_pm_trend,
     compute_spec_premiums,
     row_to_features,
     safe_int_price,
@@ -867,28 +868,9 @@ def main():
     table_data = project_table_data(rows)
 
 
-    # Fit trendline for price vs mileage. The per-variant scatter is
-    # derived on the JS side from ALL_DATA; only the trendline comes from
-    # Python.
-    all_pm = [{"mileage": r["mileage"], "price": r["price"]} for r in table_data]
-    if len(all_pm) > 5:
-        pm_X = [[1, r["mileage"]] for r in all_pm]
-        pm_y = [r["price"] for r in all_pm]
-        pm_coeffs, _, pm_singular = ols_regression(pm_X, pm_y)
-        if pm_singular:
-            print(
-                f"WARNING: price-vs-mileage trendline degenerate "
-                f"(singular columns {pm_singular}), suppressing"
-            )
-            pm_trend = []
-        else:
-            mileages = sorted(set(r["mileage"] for r in all_pm))
-            pm_trend = [
-                {"x": min(mileages), "y": round(pm_coeffs[0] + pm_coeffs[1] * min(mileages))},
-                {"x": max(mileages), "y": round(pm_coeffs[0] + pm_coeffs[1] * max(mileages))},
-            ]
-    else:
-        pm_trend = []
+    # Fit trendline for price vs mileage. Per-variant scatter is derived on
+    # the JS side from ALL_DATA; only the trendline comes from Python.
+    pm_trend = compute_pm_trend(table_data)
 
     print(f"\nTable data: {len(table_data)} used listings")
 
