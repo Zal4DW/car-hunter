@@ -374,6 +374,28 @@ def compute_spec_premiums(reg_rows, spec_options):
     return premiums
 
 
+def safe_int_price(raw, context=""):
+    """Coerce a raw CSV price cell to int or return None for unparseable input.
+
+    Handles empty strings, None, and numeric-like strings including those with
+    commas (e.g. "12,995"). Unparseable garbage (e.g. "POA") returns None
+    rather than raising, so callers can filter and log rather than crash.
+    If `context` is supplied and a value is dropped, it is included in the
+    caller's own warning logic - this function never prints on its own.
+    """
+    if raw is None or raw == "":
+        return None
+    if isinstance(raw, (int, float)):
+        return int(raw)
+    cleaned = str(raw).replace(",", "").strip()
+    if not cleaned:
+        return None
+    try:
+        return int(cleaned)
+    except ValueError:
+        return None
+
+
 def row_to_features(row, variant_by_name, tier_features):
     """Convert a row dict into the regression feature vector.
 

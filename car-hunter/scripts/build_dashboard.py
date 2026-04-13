@@ -37,6 +37,7 @@ from dashboard_lib import (  # noqa: E402
     compute_dep_curves,
     compute_spec_premiums,
     row_to_features,
+    safe_int_price,
     extract_listing_id,
     snapshot_diff,
     rolling_window,
@@ -193,8 +194,8 @@ def enrich_rows(rows, snapshots, watchlist, listing_ids, price_changes, lid_enco
         if today_snap and prior:
             prev = prior[-1]
             diff = snapshot_diff(
-                [{"listing_id": r.get("listing_id", ""), "price": int(r.get("price", 0) or 0)} for r in prev["rows"]],
-                [{"listing_id": r.get("listing_id", ""), "price": int(r.get("price", 0) or 0)} for r in today_snap["rows"]],
+                [{"listing_id": r.get("listing_id", ""), "price": safe_int_price(r.get("price")) or 0} for r in prev["rows"]],
+                [{"listing_id": r.get("listing_id", ""), "price": safe_int_price(r.get("price")) or 0} for r in today_snap["rows"]],
             )
             for ch in diff["price_changed"]:
                 r = rows_by_id.get(ch["id"])
@@ -430,7 +431,23 @@ def load_snapshots(csv_dir, profile_name):
                 continue
             snap_rows = list(reader)
         ids = {r.get("listing_id", "") for r in snap_rows if r.get("listing_id")}
-        prices = sorted(int(r.get("price", 0) or 0) for r in snap_rows if r.get("price"))
+        prices = []
+        dropped = 0
+        for r in snap_rows:
+            raw = r.get("price")
+            if raw in (None, ""):
+                continue
+            parsed = safe_int_price(raw)
+            if parsed is None:
+                dropped += 1
+            else:
+                prices.append(parsed)
+        if dropped:
+            print(
+                f"WARNING: snapshot {path}: {dropped} row(s) had unparseable "
+                f"price values, excluded from median"
+            )
+        prices.sort()
         median = prices[len(prices) // 2] if prices else 0
         snapshots.append({
             "date": snap_date,
