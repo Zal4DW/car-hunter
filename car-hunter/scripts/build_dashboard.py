@@ -323,6 +323,10 @@ def load_listing_state(explicit_path, csv_dir, profile_name, has_listing_ids):
     try:
         with open(state_path, "r") as f:
             state = json.load(f)
+    except FileNotFoundError as exc:
+        raise SystemExit(
+            f"Listing state file not found: {state_path}"
+        ) from exc
     except json.JSONDecodeError as exc:
         raise SystemExit(
             f"Listing state file {state_path} is not valid JSON: {exc}"

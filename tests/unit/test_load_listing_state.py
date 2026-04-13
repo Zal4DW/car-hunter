@@ -69,6 +69,16 @@ class TestLoadListingStateResolution:
         assert "35000_Leeds" in ids
 
 
+class TestLoadListingStatePathErrors:
+    def test_missing_explicit_file_raises_systemexit(self, tmp_path):
+        with pytest.raises(SystemExit) as exc_info:
+            load_listing_state(
+                str(tmp_path / "nope.json"), str(tmp_path), "acme", False,
+            )
+        msg = str(exc_info.value)
+        assert "not found" in msg.lower() or "no such file" in msg.lower()
+
+
 class TestLoadListingStateValidation:
     """Every SystemExit branch for malformed inputs."""
 
