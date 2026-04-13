@@ -64,12 +64,24 @@ class TestTemplateIdentifiers:
         every builder kwarg must be referenced at least once in the template.
 
         A typo like $$reg_count (literal-dollar escape) makes the placeholder
-        disappear from get_identifiers() while the builder still passes the
-        kwarg. This test catches that.
+        disappear from the parsed identifier set while the builder still
+        passes the kwarg. This test catches that.
+
+        Walks `Template.pattern` directly instead of calling get_identifiers()
+        so the test works on Python 3.10 (the method was only added in 3.11).
         """
         text = _TEMPLATE_PATH.read_text()
         template = string.Template(text)
-        template_ids = set(template.get_identifiers())
+        template_ids = set()
+        invalid = []
+        for m in template.pattern.finditer(template.template):
+            if m.group("named"):
+                template_ids.add(m.group("named"))
+            elif m.group("braced"):
+                template_ids.add(m.group("braced"))
+            elif m.group("invalid"):
+                invalid.append(m.group(0))
+        assert not invalid, f"Invalid template placeholders found: {invalid}"
 
         missing_from_template = _EXPECTED_PLACEHOLDERS - template_ids
         unused_in_builder = template_ids - _EXPECTED_PLACEHOLDERS
