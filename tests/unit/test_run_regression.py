@@ -4,18 +4,10 @@ Covers the prediction loop's guards against zero and negative predictions,
 the insufficient-data fallback path, and the annotation contract.
 """
 
-import sys
-from pathlib import Path
-
 import pytest
 
-# Make the builder importable. Tests/conftest already adds scripts/ but that
-# only exposes dashboard_lib; the builder itself lives next to it.
-_SCRIPTS = Path(__file__).resolve().parent.parent.parent / "car-hunter" / "scripts"
-if str(_SCRIPTS) not in sys.path:
-    sys.path.insert(0, str(_SCRIPTS))
-
-from build_dashboard import run_regression  # noqa: E402
+# conftest.py adds the scripts dir to sys.path (honouring CLAUDE_PLUGIN_ROOT).
+from build_dashboard import run_regression
 
 
 def _row(variant, age_months, mileage, price, spec_score=0, is_new=False):

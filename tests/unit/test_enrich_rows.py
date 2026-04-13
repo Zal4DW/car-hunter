@@ -5,17 +5,11 @@ the lid_encoding-enabled path which is effectively dead in e2e tests because
 the acme-bolt fixture ships with listing_id_date_encoding disabled.
 """
 
-import sys
 from datetime import date
-from pathlib import Path
 
 import pytest
 
-_SCRIPTS = Path(__file__).resolve().parent.parent.parent / "car-hunter" / "scripts"
-if str(_SCRIPTS) not in sys.path:
-    sys.path.insert(0, str(_SCRIPTS))
-
-from build_dashboard import enrich_rows  # noqa: E402
+from build_dashboard import enrich_rows
 
 
 def _row(listing_id="", price=40000, location="Testville"):

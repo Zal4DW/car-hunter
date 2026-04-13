@@ -18,7 +18,13 @@ from pathlib import Path
 import pytest
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
-PLUGIN_DIR = PROJECT_ROOT / "car-hunter"
+# Honour CLAUDE_PLUGIN_ROOT when the tests run against an installed plugin
+# (Claude Code marketplace install). Fall back to the in-repo layout otherwise.
+_env_root = os.environ.get("CLAUDE_PLUGIN_ROOT")
+if _env_root:
+    PLUGIN_DIR = Path(_env_root)
+else:
+    PLUGIN_DIR = PROJECT_ROOT / "car-hunter"
 SCRIPTS_DIR = PLUGIN_DIR / "scripts"
 FIXTURES_DIR = Path(__file__).resolve().parent / "fixtures"
 

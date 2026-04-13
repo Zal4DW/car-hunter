@@ -7,18 +7,14 @@ in perfect agreement, so any drift between them fails the suite.
 """
 
 import string
-import sys
-from pathlib import Path
 
 import pytest
 
-_SCRIPTS = Path(__file__).resolve().parent.parent.parent / "car-hunter" / "scripts"
-if str(_SCRIPTS) not in sys.path:
-    sys.path.insert(0, str(_SCRIPTS))
+# conftest.py adds the scripts dir to sys.path.
+from build_dashboard import build_html
+from conftest import SCRIPTS_DIR
 
-from build_dashboard import build_html  # noqa: E402
-
-_TEMPLATE_PATH = _SCRIPTS / "templates" / "dashboard.html"
+_TEMPLATE_PATH = SCRIPTS_DIR / "templates" / "dashboard.html"
 
 # The full set of kwargs the builder passes to string.Template.substitute().
 # Keep in sync with build_dashboard.py:main() and build_html().

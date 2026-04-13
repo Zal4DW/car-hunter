@@ -5,16 +5,9 @@ only reaches slowly: missing column, empty file, non-numeric price,
 options_count parse failure, and boolean coercion.
 """
 
-import sys
-from pathlib import Path
-
 import pytest
 
-_SCRIPTS = Path(__file__).resolve().parent.parent.parent / "car-hunter" / "scripts"
-if str(_SCRIPTS) not in sys.path:
-    sys.path.insert(0, str(_SCRIPTS))
-
-from build_dashboard import load_csv  # noqa: E402
+from build_dashboard import load_csv
 
 
 _SPEC_OPTIONS = [
