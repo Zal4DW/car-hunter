@@ -23,9 +23,13 @@ case "${1:-all}" in
         echo "=== Full suite + coverage ==="
         make coverage
         ;;
-    all|*)
+    all)
         echo "=== Full test suite ==="
         python3 -m pytest -q
+        ;;
+    *)
+        echo "ERROR: unknown mode '${1}'. Use: all | unit | e2e | coverage" >&2
+        exit 2
         ;;
 esac
 
