@@ -56,7 +56,7 @@ class TestLoadListingStateResolution:
             "listing_ids": {"35000_Leeds": "202602020000456"},
             "price_changes": {},
         }))
-        ids, prices = load_listing_state(
+        ids, _ = load_listing_state(
             explicit_path=None, csv_dir=str(tmp_path),
             profile_name="acme", has_listing_ids=False,
         )

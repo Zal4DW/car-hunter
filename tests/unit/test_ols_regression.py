@@ -98,7 +98,7 @@ class TestEdgeCases:
         # Same perfectly-collinear X as above
         X = [[1, 1, 2], [1, 2, 4], [1, 3, 6], [1, 4, 8]]
         y = [5, 10, 15, 20]
-        coeffs, r2, singular = ols_regression(X, y)
+        _, _, singular = ols_regression(X, y)
         assert len(singular) >= 1, "expected at least one singular column"
         assert all(isinstance(i, int) for i in singular)
 
@@ -106,5 +106,5 @@ class TestEdgeCases:
         """Healthy inputs must report an empty singular list for back-compat."""
         X = [[1, x] for x in range(1, 11)]
         y = [3 + 2 * x for x in range(1, 11)]
-        coeffs, r2, singular = ols_regression(X, y)
+        _, _, singular = ols_regression(X, y)
         assert singular == []
