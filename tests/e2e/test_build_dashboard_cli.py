@@ -203,6 +203,58 @@ class TestBuilderFailsHelpfully:
         assert "Traceback" not in combined
         assert "not found" in combined.lower() or "no such file" in combined.lower()
 
+    def test_profile_generations_not_a_list(
+        self,
+        tmp_path: Path,
+        builder_script: Path,
+        fixture_csv_path: Path,
+        fixture_profile_path: Path,
+        subprocess_env: dict,
+    ):
+        """Profile with non-list generations gives a clear error, not AttributeError."""
+        import json
+        base = json.loads(fixture_profile_path.read_text())
+        base["generations"] = "not a list"
+        bad_profile = tmp_path / "bad-gens.json"
+        bad_profile.write_text(json.dumps(base))
+        result = subprocess.run(
+            [sys.executable, str(builder_script),
+             "--profile", str(bad_profile),
+             "--csv", str(fixture_csv_path)],
+            capture_output=True, text=True, env=subprocess_env,
+            timeout=BUILDER_TIMEOUT_SECONDS,
+        )
+        assert result.returncode != 0
+        combined = result.stderr + result.stdout
+        assert "Traceback" not in combined
+        assert "generations" in combined.lower()
+
+    def test_profile_dashboard_not_a_dict(
+        self,
+        tmp_path: Path,
+        builder_script: Path,
+        fixture_csv_path: Path,
+        fixture_profile_path: Path,
+        subprocess_env: dict,
+    ):
+        """Profile with non-dict dashboard gives a clear error."""
+        import json
+        base = json.loads(fixture_profile_path.read_text())
+        base["dashboard"] = "should be a dict"
+        bad_profile = tmp_path / "bad-dashboard.json"
+        bad_profile.write_text(json.dumps(base))
+        result = subprocess.run(
+            [sys.executable, str(builder_script),
+             "--profile", str(bad_profile),
+             "--csv", str(fixture_csv_path)],
+            capture_output=True, text=True, env=subprocess_env,
+            timeout=BUILDER_TIMEOUT_SECONDS,
+        )
+        assert result.returncode != 0
+        combined = result.stderr + result.stdout
+        assert "Traceback" not in combined
+        assert "dashboard" in combined.lower()
+
     def test_profile_missing_theme_subkey(
         self,
         tmp_path: Path,

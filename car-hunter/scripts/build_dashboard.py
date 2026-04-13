@@ -72,9 +72,16 @@ def load_profile(path):
             f"See car-profile-schema.md for the expected format."
         )
 
+    # dashboard must be a dict before we can read theme from it
+    _dashboard = profile["dashboard"]
+    if not isinstance(_dashboard, dict):
+        raise SystemExit(
+            f"Profile {path}: dashboard must be an object, got {type(_dashboard).__name__}"
+        )
+
     # dashboard.theme sub-keys
     _REQUIRED_THEME_KEYS = ("bg", "card_bg", "card_border", "text", "text_muted")
-    _theme = profile["dashboard"].get("theme", {})
+    _theme = _dashboard.get("theme", {})
     if not isinstance(_theme, dict):
         raise SystemExit(
             f"Profile {path}: dashboard.theme must be an object, got {type(_theme).__name__}"
@@ -86,7 +93,11 @@ def load_profile(path):
             f"See car-profile-schema.md for the expected format."
         )
 
-    # Per-variant shape
+    # Variants container + per-entry shape
+    if not isinstance(profile["variants"], list):
+        raise SystemExit(
+            f"Profile {path}: variants must be a list, got {type(profile['variants']).__name__}"
+        )
     _REQUIRED_VARIANT_KEYS = ("name", "tier", "colour")
     for i, v in enumerate(profile["variants"]):
         if not isinstance(v, dict):
@@ -99,7 +110,11 @@ def load_profile(path):
                 f"Profile {path}: variants[{i}] is missing keys: {', '.join(_missing_v)}"
             )
 
-    # Per-spec shape
+    # Spec options container + per-entry shape
+    if not isinstance(profile["spec_options"], list):
+        raise SystemExit(
+            f"Profile {path}: spec_options must be a list, got {type(profile['spec_options']).__name__}"
+        )
     _REQUIRED_SPEC_KEYS = ("key", "label", "weight")
     for i, s in enumerate(profile["spec_options"]):
         if not isinstance(s, dict):
@@ -110,6 +125,23 @@ def load_profile(path):
         if _missing_s:
             raise SystemExit(
                 f"Profile {path}: spec_options[{i}] is missing keys: {', '.join(_missing_s)}"
+            )
+
+    # Generations container + per-entry shape + new_prices shape
+    if not isinstance(profile["generations"], list):
+        raise SystemExit(
+            f"Profile {path}: generations must be a list, got {type(profile['generations']).__name__}"
+        )
+    for i, gen in enumerate(profile["generations"]):
+        if not isinstance(gen, dict):
+            raise SystemExit(
+                f"Profile {path}: generations[{i}] must be an object, got {type(gen).__name__}"
+            )
+        _gen_new_prices = gen.get("new_prices", {})
+        if not isinstance(_gen_new_prices, dict):
+            raise SystemExit(
+                f"Profile {path}: generations[{i}].new_prices must be an object, "
+                f"got {type(_gen_new_prices).__name__}"
             )
 
     variants = profile["variants"]
