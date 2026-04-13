@@ -221,15 +221,26 @@ def _enrich_with_listing_ids(rows, snapshots, watchlist, lid_encoding, today):
     pulse = {"new": 0, "removed": 0, "price_drops": 0, "previous_date": None}
     rows_by_id = {r["listing_id"]: r for r in rows if r["listing_id"]}
 
+    # Track how many encoded IDs successfully yielded a date so we can
+    # warn if almost all parses failed (typically a scraper regression).
+    attempted = 0
+    parsed = 0
     for row in rows:
         lid = row["listing_id"]
         if not lid:
             continue
         if lid_encoding.get("enabled") and lid.isdigit():
             row["autotrader_url"] = f"https://www.autotrader.co.uk/car-details/{lid}"
+            attempted += 1
             ld = parse_listing_date(lid)
             if ld:
+                parsed += 1
                 row["days_on_market"] = (today - ld).days
+    if attempted and parsed < attempted:
+        print(
+            f"WARNING: parsed {parsed}/{attempted} listing IDs as encoded dates; "
+            f"{attempted - parsed} could not be decoded. Days-on-market may be incomplete."
+        )
 
     today_snap = next((s for s in snapshots if s["date"] == today), None)
     prior = [s for s in snapshots if s["date"] < today]
