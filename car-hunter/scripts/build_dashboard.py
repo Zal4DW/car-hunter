@@ -32,6 +32,7 @@ from dashboard_lib import (  # noqa: E402
     spec_score as _spec_score,
     retained_pct as _retained_pct,
     build_feature_matrix,
+    build_tier_features,
     compute_dep_curves,
     compute_pm_trend,
     compute_spec_premiums,
@@ -825,15 +826,7 @@ def main():
     # ── Determine variant tier features ─────────────────────────────────
     # Build a list of tier feature names for tiers > 0
 
-    tier_features = []
-    for v in VARIANTS:
-        if v["tier"] > 0:
-            tier_features.append({
-                "name": f"is_tier_{v['tier']}",
-                "tier": v["tier"],
-                "variant_name": v["name"],
-            })
-
+    tier_features = build_tier_features(VARIANTS)
     print(f"Tier features: {[tf['name'] for tf in tier_features]}")
 
     # ── Multivariate regression ─────────────────────────────────────────

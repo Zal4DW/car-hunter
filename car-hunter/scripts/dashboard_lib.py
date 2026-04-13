@@ -286,6 +286,24 @@ def validate_watchlist(data, source="watchlist"):
     return {"listings": listings}
 
 
+def build_tier_features(variants):
+    """Build the tier dummy-variable feature list for the regression.
+
+    Only variants with `tier > 0` contribute a dummy column; tier 0 is
+    the reference category absorbed into the intercept. Returns a list
+    of `{name, tier, variant_name}` dicts in variant iteration order.
+    """
+    features = []
+    for v in variants:
+        if v["tier"] > 0:
+            features.append({
+                "name": f"is_tier_{v['tier']}",
+                "tier": v["tier"],
+                "variant_name": v["name"],
+            })
+    return features
+
+
 def compute_pm_trend(rows):
     """Fit a linear trendline for price vs mileage over used listings.
 
