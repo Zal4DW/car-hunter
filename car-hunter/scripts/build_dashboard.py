@@ -333,8 +333,6 @@ def enrich_rows(rows, snapshots, watchlist, listing_ids, price_changes, lid_enco
     _enrich_with_legacy_sidecar(rows, listing_ids, price_changes, lid_encoding, today)
     return {"new": 0, "removed": 0, "price_drops": 0, "previous_date": None}
 
-    return pulse
-
 
 def load_listing_state(explicit_path, csv_dir, profile_name, has_listing_ids):
     """Resolve and load the listing-state sidecar JSON.
