@@ -27,18 +27,15 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from dashboard_lib import (  # noqa: E402
     parse_listing_date,
     ols_regression,
-    fit_poly2,
     js_safe,
     spec_labels as _spec_labels,
     spec_score as _spec_score,
-    get_tier_value as _get_tier_value,
     retained_pct as _retained_pct,
     build_feature_matrix,
     compute_dep_curves,
     compute_spec_premiums,
     row_to_features,
     safe_int_price,
-    extract_listing_id,
     snapshot_diff,
     rolling_window,
     validate_watchlist,
@@ -790,7 +787,7 @@ def main():
     # Records what the search skill actually scraped, so "removed" listings
     # are not confused with coverage gaps.
 
-    CAPTURE_MANIFEST, CAPTURE_BADGE = load_capture_manifest(csv_dir, PROFILE_NAME, today)
+    _, CAPTURE_BADGE = load_capture_manifest(csv_dir, PROFILE_NAME, today)
 
     # ── Watchlist ───────────────────────────────────────────────────────
     WATCHLIST = load_watchlist(csv_dir, PROFILE_NAME)
@@ -870,15 +867,9 @@ def main():
     table_data = project_table_data(rows)
 
 
-    # Price vs mileage
-    price_mileage_data = {}
-    for r in table_data:
-        v = r["variant"]
-        if v not in price_mileage_data:
-            price_mileage_data[v] = []
-        price_mileage_data[v].append({"x": r["mileage"], "y": r["price"], "location": r["location"]})
-
-    # Fit trendline for price vs mileage
+    # Fit trendline for price vs mileage. The per-variant scatter is
+    # derived on the JS side from ALL_DATA; only the trendline comes from
+    # Python.
     all_pm = [{"mileage": r["mileage"], "price": r["price"]} for r in table_data]
     if len(all_pm) > 5:
         pm_X = [[1, r["mileage"]] for r in all_pm]
