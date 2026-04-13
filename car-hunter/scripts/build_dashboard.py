@@ -927,7 +927,12 @@ def main():
 
     # Fit trendline for price vs mileage. Per-variant scatter is derived on
     # the JS side from ALL_DATA; only the trendline comes from Python.
-    pm_trend = compute_pm_trend(table_data)
+    pm_trend, pm_singular = compute_pm_trend(table_data)
+    if pm_singular:
+        print(
+            f"WARNING: price-vs-mileage trendline degenerate "
+            f"(singular columns {pm_singular}), suppressing"
+        )
 
     print(f"\nTable data: {len(table_data)} used listings")
 
