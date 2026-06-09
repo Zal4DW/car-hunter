@@ -27,11 +27,13 @@ When Claude Code installs this plugin from the marketplace, `${CLAUDE_PLUGIN_ROO
 
 ## Components
 
-- **Commands** (`car-hunter/commands/`): `/setup-car`, `/search-cars`, `/build-dashboard`, `/car-pulse`, `/use-car`, `/watch-car`. Commands are deliberately thin: they inject live profile context via `` !`command` `` and defer the process to the matching skill. Never duplicate skill steps inside a command.
-- **Skills** (`car-hunter/skills/`): `setup-car-profile`, `car-search`, `car-value-dashboard`. Skills are the single source of process truth.
+- **Commands** (`car-hunter/commands/`): `/setup-car`, `/search-cars`, `/build-dashboard`, `/car-pulse`, `/compare-cars`, `/help-me-negotiate`, `/use-car`, `/watch-car`. Commands are deliberately thin: they inject live profile context via `` !`command` `` and defer the process to the matching skill. Never duplicate skill steps inside a command.
+- **Skills** (`car-hunter/skills/`): `setup-car-profile`, `car-search`, `car-value-dashboard`, `negotiation-coach`. Skills are the single source of process truth.
 - **Ingest** (`car-hunter/scripts/ingest_listings.py` + `ingest_lib.py`): turns the raw capture JSON written by the search skill into the dated CSV + capture manifest. ALL derived maths (listing ids, reg dates, ages, depreciation, generation detection, cross-source dedup) happens here - the language model only extracts what listing pages say.
 - **Builder** (`car-hunter/scripts/build_dashboard.py`): generates the self-contained HTML dashboard. Also provides `--validate-profile` (used by setup) and `--summary-json` (machine-readable findings for the skill layer).
 - **Pulse** (`car-hunter/scripts/market_pulse.py`): quick what-changed digest by diffing the two latest snapshot CSVs - no dashboard rebuild needed.
+- **Compare** (`car-hunter/scripts/compare_cars.py` + `compare_lib.py`): budget-anchored cross-profile comparison ("what can I get for £40k?"). Each car is scored by its own profile's regression, then the budget-sliced markets are laid side by side.
+- **Negotiation** (`car-hunter/scripts/negotiation_brief.py` + `negotiation_lib.py`): evidence pack for haggling over one listing - market position, price-drop history, comparables, supply, offer anchors. The `negotiation-coach` skill turns the numbers into strategy.
 - **Lib** (`car-hunter/scripts/dashboard_lib.py`): pure maths helpers extracted for unit testability.
 
 ## Rules (always apply)
@@ -47,7 +49,8 @@ When Claude Code installs this plugin from the marketplace, `${CLAUDE_PLUGIN_ROO
 2. `/search-cars` scrapes configured sources via browser MCP (WebFetch is blocked on most listing sites), writes a **raw capture JSON**, then runs `ingest_listings.py` which emits the dated CSV + capture manifest into `{profile_name}-searches/` in the user's workspace. A dated markdown report is written alongside.
 3. `/build-dashboard` runs `build_dashboard.py` over the latest CSV and profile to emit `{profile_name}-dashboard.html` plus a summary JSON the skill presents from.
 4. `/car-pulse` answers "what changed since last search" from the snapshot archive without a rebuild.
-5. Multi-car: one profile per car; `${CLAUDE_PLUGIN_DATA}/active-profile` holds the default; `/use-car` switches it; naming a car in any command's arguments overrides it for that run.
+5. `/compare-cars {budget}` answers "what can I get for £X" across tracked cars (or within one car's variants).
+6. Multi-car: one profile per car; `${CLAUDE_PLUGIN_DATA}/active-profile` holds the default; `/use-car` switches it; naming a car in any command's arguments overrides it for that run.
 
 ## Conventions
 

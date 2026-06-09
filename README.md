@@ -83,6 +83,22 @@ One car is the simplest case - a single profile, and every command just uses it.
 
 Or just name the car when you ask: `/search-cars audi` searches that profile regardless of which one is active, and `/car-pulse` for each candidate gives you a quick morning sweep across everything you're watching.
 
+### Get help haggling
+
+```
+/help-me-negotiate 202606059912345
+```
+
+Found the one? Car Hunter becomes your negotiation coach. It builds an evidence pack from everything it knows about that exact car - how far the asking price sits above the market model, how many days it has been on the forecourt, whether the dealer has already cut the price, the cheapest comparable cars you can cite, and how much supply the dealer is competing with. Then it gives you an opening offer, a realistic target, a walk-away number, drafts the offer email if you want one, and coaches you through the dealer's standard moves ("another buyer is coming this afternoon...") as the conversation unfolds.
+
+### Compare what your money actually buys
+
+```
+/compare-cars 40k
+```
+
+The question every cross-shopper actually has: **"what can I get for £40,000?"** Car Hunter answers it across every car you track (or just the ones you name): how many listings are in budget for each car, the newest year and lowest mileage your money reaches, what a typical example looks like, which car holds its value best, and the single best-value pick for each - scored against that car's own market, so a bargain i4 and a bargain e-tron GT are each judged fairly. It works for one car too: `/compare-cars 40k` on a single profile shows what the budget buys across that car's trims and generations.
+
 ## What you'll need
 
 - **Claude Cowork** subscription
