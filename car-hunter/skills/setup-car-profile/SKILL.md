@@ -69,15 +69,16 @@ If the user wants full control, or the quick path hits a car you cannot research
 5. Generate `${CLAUDE_PLUGIN_DATA}/references/{profile-name}-specs.md` with human-readable spec identification guidance derived from spec_options and search_terms.
 6. Offer to run the first search immediately.
 
-## Multiple cars
+## One car or many
 
-Each car gets its own profile, its own `{profile-name}-searches/` folder, and its own dashboard - they never share data. To track a BMW and an Audi:
+A single profile is the simplest case: every command uses it without asking. Users comparing alternatives (any combination - two rival models, two generations of the same car, three candidates) create one profile per car:
 
 - Run this skill once per car.
+- Each profile gets its own `{profile-name}-searches/` folder and its own dashboard - they never share data, so the user can open the dashboards side by side to compare.
 - The **active profile** (`${CLAUDE_PLUGIN_DATA}/active-profile`) decides which car `/search-cars`, `/build-dashboard`, and `/car-pulse` use by default.
 - `/use-car {name}` switches the active profile; naming a car in any command's arguments overrides it for that run.
 
-When creating a second profile, leave the active profile pointing at whichever car the user says they are currently focused on (ask if unclear).
+When creating an additional profile, leave the active profile pointing at whichever car the user says they are currently focused on (ask if unclear).
 
 ## Updating an existing profile
 

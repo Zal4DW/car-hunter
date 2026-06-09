@@ -13,7 +13,7 @@ You don't need to know how to code. You just chat with Claude.
 - **Remembers what it's seen.** Every search gets saved. Next time, Car Hunter tells you which cars are new, which have sold, and which dealers have dropped the price.
 - **Tells you which cars are good value.** Not just "cheapest" - it works out what each car *should* cost given its age, mileage, trim and options, then flags the ones priced below that as genuine deals.
 - **Builds a beautiful interactive dashboard.** Depreciation curves, a negotiation radar to spot stale listings ripe for a cheeky offer, a spec-premium chart showing what each extra actually adds to the price, and a sortable table of every car on the market right now.
-- **Works for any car - and more than one at a time.** Audi e-tron GT, BMW M4, Tesla Model 3, Porsche Taycan, Volvo V60 - whatever you're hunting, tell Claude once and it learns the specifics. Tracking a BMW *and* an Audi? Set up a profile for each and switch between them with `/use-car`.
+- **Works for any car - and any number of them.** Audi e-tron GT, BMW M4, Tesla Model 3, Porsche Taycan, Volvo V60 - whatever you're hunting, tell Claude once and it learns the specifics. Hunt a single car, or set up a profile for each candidate you're weighing up and switch between them with `/use-car`.
 
 ## Getting started
 
@@ -75,13 +75,13 @@ The quick daily question - "anything new? anything dropped in price?" - answered
 
 ### Tracking more than one car
 
-Run `/setup-car` once per car - say, a BMW i4 and an Audi e-tron GT. Each gets its own profile, its own search history, and its own dashboard. Switch the default with:
+One car is the simplest case - a single profile, and every command just uses it. But if you're weighing up alternatives (any combination: a BMW i4 against an Audi e-tron GT, two Porsche generations, three different EVs), run `/setup-car` once per candidate. Each gets its own profile, its own search history, and its own dashboard, so you can open them side by side and compare deals, depreciation curves, and market activity. Switch the default with:
 
 ```
 /use-car bmw-i4
 ```
 
-Or just name the car when you ask: `/search-cars audi` searches the Audi regardless of which profile is active.
+Or just name the car when you ask: `/search-cars audi` searches that profile regardless of which one is active, and `/car-pulse` for each candidate gives you a quick morning sweep across everything you're watching.
 
 ## What you'll need
 
