@@ -18,15 +18,18 @@ TIMEOUT = 60
 
 @pytest.fixture(scope="session")
 def ingest_script(scripts_dir: Path) -> Path:
+    """Ingest script."""
     return scripts_dir / "ingest_listings.py"
 
 
 @pytest.fixture(scope="session")
 def pulse_script(scripts_dir: Path) -> Path:
+    """Pulse script."""
     return scripts_dir / "market_pulse.py"
 
 
 def _raw_capture():
+    """Raw capture."""
     return {
         "captured": "2026-04-10",
         "sources": [
@@ -70,7 +73,9 @@ def _raw_capture():
 
 
 class TestIngestCli:
+    """Test Ingest Cli test cases."""
     def _run_ingest(self, ingest_script, profile, capture_path, outdir, subprocess_env):
+        """Run ingest."""
         return subprocess.run(
             [sys.executable, str(ingest_script),
              "--profile", str(profile),
@@ -82,6 +87,7 @@ class TestIngestCli:
     def test_ingest_writes_csv_and_manifest(
         self, tmp_path, ingest_script, fixture_profile_path, subprocess_env,
     ):
+        """Ingest writes csv and manifest."""
         capture_path = tmp_path / "raw.json"
         capture_path.write_text(json.dumps(_raw_capture()))
         result = self._run_ingest(
@@ -135,6 +141,7 @@ class TestIngestCli:
     def test_missing_capture_file_fails_helpfully(
         self, tmp_path, ingest_script, fixture_profile_path, subprocess_env,
     ):
+        """Missing capture file fails helpfully."""
         result = self._run_ingest(
             ingest_script, fixture_profile_path, tmp_path / "nope.json", tmp_path, subprocess_env)
         assert result.returncode != 0
@@ -145,6 +152,7 @@ class TestIngestCli:
     def test_malformed_capture_json_fails_helpfully(
         self, tmp_path, ingest_script, fixture_profile_path, subprocess_env,
     ):
+        """Malformed capture json fails helpfully."""
         capture_path = tmp_path / "bad.json"
         capture_path.write_text("{not json")
         result = self._run_ingest(
@@ -156,13 +164,16 @@ class TestIngestCli:
 
 
 class TestMarketPulseCli:
+    """Test Market Pulse Cli test cases."""
     def _stage_snapshots(self, tmp_path, fixture_dated_csvs):
+        """Stage snapshots."""
         for p in fixture_dated_csvs:
             (tmp_path / p.name).write_bytes(p.read_bytes())
 
     def test_pulse_text_digest(
         self, tmp_path, pulse_script, fixture_profile_path, fixture_dated_csvs, subprocess_env,
     ):
+        """Pulse text digest."""
         self._stage_snapshots(tmp_path, fixture_dated_csvs)
         result = subprocess.run(
             [sys.executable, str(pulse_script),
@@ -178,6 +189,7 @@ class TestMarketPulseCli:
     def test_pulse_json_shape(
         self, tmp_path, pulse_script, fixture_profile_path, fixture_dated_csvs, subprocess_env,
     ):
+        """Pulse json shape."""
         self._stage_snapshots(tmp_path, fixture_dated_csvs)
         result = subprocess.run(
             [sys.executable, str(pulse_script),
@@ -198,6 +210,7 @@ class TestMarketPulseCli:
     def test_pulse_with_no_snapshots_explains(
         self, tmp_path, pulse_script, fixture_profile_path, subprocess_env,
     ):
+        """Pulse with no snapshots explains."""
         result = subprocess.run(
             [sys.executable, str(pulse_script),
              "--profile", str(fixture_profile_path),

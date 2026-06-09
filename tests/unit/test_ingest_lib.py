@@ -32,6 +32,7 @@ FIXTURES = Path(__file__).resolve().parent.parent / "fixtures"
 
 @pytest.fixture(scope="module")
 def profile():
+    """Profile."""
     return json.loads((FIXTURES / "acme-bolt.json").read_text())
 
 
@@ -39,6 +40,7 @@ _CAPTURE_DATE = date(2026, 4, 10)
 
 
 class TestParsePrice:
+    """Test Parse Price test cases."""
     @pytest.mark.parametrize("raw,expected", [
         (42995, 42995),
         (42995.0, 42995),
@@ -52,37 +54,48 @@ class TestParsePrice:
         (True, None),
     ])
     def test_parse_price(self, raw, expected):
+        """Parse price."""
         assert parse_price(raw) == expected
 
     def test_parse_mileage_text(self):
+        """Parse mileage text."""
         assert parse_mileage("12,400 miles") == 12400
         assert parse_mileage("Mileage: 8,000") == 8000
 
 
 class TestDates:
+    """Test Dates test cases."""
     def test_decimal_year_midpoints(self):
+        """Decimal year midpoints."""
         assert decimal_year(date(2026, 1, 1)) == 2026.0
         assert 2026.49 < decimal_year(date(2026, 7, 1)) < 2026.51
 
     def test_reg_lookup_beats_year_fallback(self, profile):
+        """Reg lookup beats year fallback."""
         assert reg_to_decimal("74", profile["reg_date_mapping"]) == 2024.75
 
     def test_unmapped_reg_falls_back_to_mid_year(self, profile):
+        """Unmapped reg falls back to mid year."""
         assert reg_to_decimal("99", profile["reg_date_mapping"], year=2023) == 2023.5
 
     def test_no_reg_no_year_returns_none(self, profile):
+        """No reg no year returns none."""
         assert reg_to_decimal(None, profile["reg_date_mapping"]) is None
 
 
 class TestDetectGeneration:
+    """Test Detect Generation test cases."""
     def test_open_ended_generation_matches_recent_year(self, profile):
+        """Open ended generation matches recent year."""
         gen = detect_generation(2025, profile["generations"])
         assert gen["name"] == "mk1"
 
     def test_year_before_first_generation_returns_none(self, profile):
+        """Year before first generation returns none."""
         assert detect_generation(2015, profile["generations"]) is None
 
     def test_bounded_ranges_pick_correct_generation(self):
+        """Bounded ranges pick correct generation."""
         gens = [
             {"name": "mk1", "year_from": 2018, "year_to": 2021},
             {"name": "mk2", "year_from": 2022, "year_to": None},
@@ -92,21 +105,26 @@ class TestDetectGeneration:
 
 
 class TestSpecs:
+    """Test Specs test cases."""
     def test_list_shape_normalises(self, profile):
+        """List shape normalises."""
         flags = normalise_specs(["has_sunroof"], profile["spec_options"])
         assert flags == {"has_sunroof": True, "has_premium_audio": False, "has_heated_seats": False}
 
     def test_dict_shape_normalises(self, profile):
+        """Dict shape normalises."""
         flags = normalise_specs({"has_premium_audio": True, "has_sunroof": False},
                                 profile["spec_options"])
         assert flags["has_premium_audio"] is True
         assert flags["has_sunroof"] is False
 
     def test_unknown_keys_ignored(self, profile):
+        """Unknown keys ignored."""
         flags = normalise_specs(["has_flux_capacitor"], profile["spec_options"])
         assert all(v is False for v in flags.values())
 
     def test_standard_specs_forced_true(self, profile):
+        """Standard specs forced true."""
         sport = profile["variants"][1]
         flags = normalise_specs([], profile["spec_options"])
         apply_standard_specs(flags, sport)
@@ -114,7 +132,9 @@ class TestSpecs:
 
 
 class TestDeriveListing:
+    """Test Derive Listing test cases."""
     def _raw(self, **overrides):
+        """Raw."""
         raw = {
             "url": "https://www.autotrader.co.uk/car-details/202602170000123",
             "source": "AutoTrader",
@@ -131,6 +151,7 @@ class TestDeriveListing:
         return raw
 
     def test_happy_path_derives_all_fields(self, profile):
+        """Happy path derives all fields."""
         row, warning = derive_listing(self._raw(), profile, _CAPTURE_DATE)
         assert warning is None
         assert row["listing_id"] == "202602170000123"
@@ -149,6 +170,7 @@ class TestDeriveListing:
         assert row["options_count"] == 2
 
     def test_non_autotrader_url_gets_hash_id(self, profile):
+        """Non autotrader url gets hash id."""
         row, _ = derive_listing(
             self._raw(url="https://www.cinch.co.uk/used-cars/12345", source="Cinch"),
             profile, _CAPTURE_DATE,
@@ -156,11 +178,13 @@ class TestDeriveListing:
         assert row["listing_id"].startswith("Cinch:")
 
     def test_missing_price_skips_with_reason(self, profile):
+        """Missing price skips with reason."""
         row, reason = derive_listing(self._raw(price="POA"), profile, _CAPTURE_DATE)
         assert row is None
         assert "price" in reason
 
     def test_unknown_variant_warns_but_keeps_row(self, profile):
+        """Unknown variant warns but keeps row."""
         row, warning = derive_listing(self._raw(variant="Bolt GT"), profile, _CAPTURE_DATE)
         assert row is not None
         assert "Bolt GT" in warning
@@ -169,6 +193,7 @@ class TestDeriveListing:
         assert row["depreciation_pa"] == 0
 
     def test_year_outside_generations_warns(self, profile):
+        """Year outside generations warns."""
         row, warning = derive_listing(self._raw(year=2015, reg="15"), profile, _CAPTURE_DATE)
         assert row is not None
         assert "generation" in warning
@@ -183,13 +208,16 @@ class TestDeriveListing:
 
 
 class TestDedup:
+    """Test Dedup test cases."""
     def _row(self, listing_id, price=42995, year=2024, mileage=12400, location="Leeds"):
+        """Row."""
         return {
             "listing_id": listing_id, "price": price, "year": year,
             "mileage": mileage, "location": location,
         }
 
     def test_same_car_two_sources_keeps_canonical_id(self):
+        """Same car two sources keeps canonical id."""
         rows = [
             self._row("Cinch:abc123def456"),
             self._row("202602170000123"),
@@ -200,6 +228,7 @@ class TestDedup:
         assert deduped[0]["listing_id"] == "202602170000123"
 
     def test_canonical_first_is_kept(self):
+        """Canonical first is kept."""
         rows = [
             self._row("202602170000123"),
             self._row("Cinch:abc123def456"),
@@ -208,11 +237,14 @@ class TestDedup:
         assert deduped[0]["listing_id"] == "202602170000123"
 
     def test_location_match_is_case_insensitive(self):
+        """Location match is case insensitive."""
         rows = [self._row("a:1", location="Leeds"), self._row("202602170000123", location="LEEDS")]
         deduped, removed = dedup_listings(rows)
         assert removed == 1
+        assert [r["listing_id"] for r in deduped] == ["202602170000123"]
 
     def test_different_cars_not_collapsed(self):
+        """Different cars not collapsed."""
         rows = [self._row("a:1", price=42995), self._row("b:2", price=41000)]
         deduped, removed = dedup_listings(rows)
         assert removed == 0
@@ -220,7 +252,9 @@ class TestDedup:
 
 
 class TestCsvColumns:
+    """Test Csv Columns test cases."""
     def test_column_order_matches_builder_contract(self, profile):
+        """Column order matches builder contract."""
         cols = csv_columns(profile["spec_options"])
         assert cols[0] == "listing_id"
         assert "variant" in cols and "price" in cols and "mileage" in cols
@@ -230,7 +264,9 @@ class TestCsvColumns:
 
 
 class TestSummariseSources:
+    """Test Summarise Sources test cases."""
     def test_fills_missing_status(self):
+        """Fills missing status."""
         out = summarise_sources([{"name": "AutoTrader"}, "garbage", {"name": "Cinch", "status": "ok"}])
         assert out == [
             {"name": "AutoTrader", "status": "unknown"},
@@ -238,4 +274,5 @@ class TestSummariseSources:
         ]
 
     def test_none_yields_empty(self):
+        """None yields empty."""
         assert summarise_sources(None) == []

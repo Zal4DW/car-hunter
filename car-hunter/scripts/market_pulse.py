@@ -57,6 +57,7 @@ def build_pulse(snapshots):
     latest_by_id = {r.get("listing_id"): r for r in latest["rows"] if r.get("listing_id")}
 
     def _describe(change):
+        """Describe."""
         row = latest_by_id.get(change["id"], {})
         return {
             "listing_id": change["id"],
@@ -116,6 +117,7 @@ def print_pulse(pulse, display_name):
 
 
 def main():
+    """Main."""
     parser = argparse.ArgumentParser(description="Quick what-changed digest from snapshot CSVs")
     parser.add_argument("--profile", required=True, help="Path to car-profile.json")
     parser.add_argument("--dir", required=True, help="Searches folder containing dated CSVs")

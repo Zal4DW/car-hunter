@@ -6,7 +6,9 @@ from dashboard_lib import build_tier_features
 
 
 class TestBuildTierFeatures:
+    """Test Build Tier Features test cases."""
     def test_tier_zero_variants_excluded(self):
+        """Tier zero variants excluded."""
         variants = [
             {"name": "Base", "tier": 0, "colour": "#000"},
             {"name": "Sport", "tier": 1, "colour": "#f00"},
@@ -16,6 +18,7 @@ class TestBuildTierFeatures:
         assert result[0]["variant_name"] == "Sport"
 
     def test_feature_name_is_is_tier_N(self):
+        """Feature name is is tier n."""
         variants = [
             {"name": "Sport", "tier": 1, "colour": "#f00"},
             {"name": "GT", "tier": 2, "colour": "#0f0"},
@@ -25,9 +28,11 @@ class TestBuildTierFeatures:
         assert result[1]["name"] == "is_tier_2"
 
     def test_empty_variants_returns_empty(self):
+        """Empty variants returns empty."""
         assert build_tier_features([]) == []
 
     def test_all_tier_zero_returns_empty(self):
+        """All tier zero returns empty."""
         variants = [{"name": "Base", "tier": 0, "colour": "#000"}]
         assert build_tier_features(variants) == []
 

@@ -46,6 +46,7 @@ from ingest_lib import (  # noqa: E402
 
 
 def main():
+    """Main."""
     parser = argparse.ArgumentParser(
         description="Derive the dated listings CSV from a raw capture JSON"
     )

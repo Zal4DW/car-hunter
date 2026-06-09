@@ -17,10 +17,12 @@ TIMEOUT = 60
 
 @pytest.fixture(scope="session")
 def compare_script(scripts_dir: Path) -> Path:
+    """Compare script."""
     return scripts_dir / "compare_cars.py"
 
 
 def _run(compare_script, cars, subprocess_env, extra=None):
+    """Run."""
     args = [sys.executable, str(compare_script)]
     for profile, csv in cars:
         args += ["--car", f"{profile}:{csv}"]
@@ -32,10 +34,12 @@ def _run(compare_script, cars, subprocess_env, extra=None):
 
 
 class TestCompareCarsCli:
+    """Test Compare Cars Cli test cases."""
     def test_two_car_comparison_at_budget(
         self, compare_script, fixture_profile_path, fixture_multigen_profile_path,
         fixture_csv_path, subprocess_env,
     ):
+        """Two car comparison at budget."""
         result = _run(
             compare_script,
             [(fixture_profile_path, fixture_csv_path),
@@ -52,6 +56,7 @@ class TestCompareCarsCli:
     def test_json_contract_for_command_layer(
         self, compare_script, fixture_profile_path, fixture_csv_path, subprocess_env,
     ):
+        """Json contract for command layer."""
         result = _run(
             compare_script,
             [(fixture_profile_path, fixture_csv_path)],
@@ -75,6 +80,7 @@ class TestCompareCarsCli:
     def test_budget_below_market_reports_entry_point(
         self, compare_script, fixture_profile_path, fixture_csv_path, subprocess_env,
     ):
+        """Budget below market reports entry point."""
         result = _run(
             compare_script,
             [(fixture_profile_path, fixture_csv_path)],
@@ -87,6 +93,7 @@ class TestCompareCarsCli:
     def test_no_budget_compares_whole_market(
         self, compare_script, fixture_profile_path, fixture_csv_path, subprocess_env,
     ):
+        """No budget compares whole market."""
         result = _run(
             compare_script,
             [(fixture_profile_path, fixture_csv_path)],
@@ -98,6 +105,7 @@ class TestCompareCarsCli:
     def test_malformed_car_spec_fails_helpfully(
         self, compare_script, subprocess_env, tmp_path,
     ):
+        """Malformed car spec fails helpfully."""
         result = subprocess.run(
             [sys.executable, str(compare_script), "--car", "no-colon-here"],
             capture_output=True, text=True, env=subprocess_env, timeout=TIMEOUT,

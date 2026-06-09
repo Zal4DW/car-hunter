@@ -18,6 +18,7 @@ from negotiation_lib import (
 
 def _row(listing_id, price, variant="Bolt Sport", year=2024, mileage=12000,
          age=1.5, predicted=None, brand_new=False):
+    """Row."""
     predicted = price if predicted is None else predicted
     deviation = price - predicted
     return {
@@ -36,11 +37,14 @@ def _row(listing_id, price, variant="Bolt Sport", year=2024, mileage=12000,
 
 
 def _snap(d, rows):
+    """Snap."""
     return {"date": d, "rows": rows}
 
 
 class TestPriceHistory:
+    """Test Price History test cases."""
     def test_timeline_records_only_changes(self):
+        """Timeline records only changes."""
         snaps = [
             _snap(date(2026, 3, 1), [{"listing_id": "X", "price": "45000"}]),
             _snap(date(2026, 3, 15), [{"listing_id": "X", "price": "45000"}]),
@@ -56,13 +60,16 @@ class TestPriceHistory:
         assert h["total_change"] == -1500
 
     def test_unknown_listing_returns_none(self):
+        """Unknown listing returns none."""
         snaps = [_snap(date(2026, 3, 1), [{"listing_id": "Y", "price": "1"}])]
         assert price_history(snaps, "X") is None
         assert price_history(snaps, "") is None
 
 
 class TestFindComparables:
+    """Test Find Comparables test cases."""
     def test_same_variant_and_proximity_win(self):
+        """Same variant and proximity win."""
         target = _row("T", 42000, mileage=12000, age=1.5)
         rows = [
             target,
@@ -78,7 +85,9 @@ class TestFindComparables:
 
 
 class TestNegotiationLevers:
+    """Test Negotiation Levers test cases."""
     def test_overpriced_stale_reduced_and_supply(self):
+        """Overpriced stale reduced and supply."""
         target = _row("T", 44000, predicted=40000)
         target["days_on_market"] = 70
         rows = [target] + [_row(f"c{i}", 39000 + i) for i in range(5)]
@@ -97,12 +106,14 @@ class TestNegotiationLevers:
         assert strengths == sorted(strengths, key={"strong": 0, "moderate": 1, "weak": 2}.get)
 
     def test_underpriced_car_yields_weak_move_fast_lever(self):
+        """Underpriced car yields weak move fast lever."""
         target = _row("T", 38000, predicted=40000)
         levers = negotiation_levers(target, None, [target])
         assert levers[0]["lever"] == "already_good_value"
         assert levers[0]["strength"] == "weak"
 
     def test_fresh_fair_listing_has_no_false_levers(self):
+        """Fresh fair listing has no false levers."""
         target = _row("T", 40000, predicted=40000)
         target["days_on_market"] = 5
         levers = negotiation_levers(target, None, [target])
@@ -110,7 +121,9 @@ class TestNegotiationLevers:
 
 
 class TestOfferAnchors:
+    """Test Offer Anchors test cases."""
     def test_overpriced_anchors_on_model_price(self):
+        """Overpriced anchors on model price."""
         target = _row("T", 44000, predicted=40000)
         levers = [{"lever": "a", "strength": "strong"},
                   {"lever": "b", "strength": "strong"}]
@@ -121,6 +134,7 @@ class TestOfferAnchors:
         assert a["basis"] == "modelled market price"
 
     def test_fair_price_anchors_on_modest_discount(self):
+        """Fair price anchors on modest discount."""
         target = _row("T", 40000, predicted=40500)
         a = suggest_offer_anchors(target, [])
         assert a["opening_offer"] == round(40000 * 0.97)

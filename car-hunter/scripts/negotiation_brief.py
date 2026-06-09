@@ -41,6 +41,7 @@ from negotiation_lib import (  # noqa: E402
 
 
 def main():
+    """Main."""
     parser = argparse.ArgumentParser(
         description="Evidence pack for negotiating a specific listing"
     )

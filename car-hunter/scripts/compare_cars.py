@@ -77,6 +77,7 @@ def print_comparison(result):
 
 
 def main():
+    """Main."""
     parser = argparse.ArgumentParser(
         description="Compare tracked cars at a budget: what can I get for £X?"
     )

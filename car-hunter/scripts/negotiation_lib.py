@@ -68,6 +68,7 @@ def find_comparables(rows, target, max_n=5):
     ]
 
     def closeness(r):
+        """Closeness."""
         same_variant = 0 if r.get("variant") == target.get("variant") else 1
         age_gap = abs((r.get("age_years") or 0) - (target.get("age_years") or 0))
         mileage_gap = abs((r.get("mileage") or 0) - (target.get("mileage") or 0)) / 12000

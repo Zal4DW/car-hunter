@@ -119,8 +119,8 @@ def js_safe(obj):
     return (
         json.dumps(obj, default=str)
         .replace("</", "<\\/")
-        .replace(" ", "\\u2028")
-        .replace(" ", "\\u2029")
+        .replace("\u2028", "\\u2028")
+        .replace("\u2029", "\\u2029")
     )
 
 

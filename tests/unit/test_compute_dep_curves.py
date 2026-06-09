@@ -6,6 +6,7 @@ from dashboard_lib import compute_dep_curves
 
 
 def _row(variant, age_months, price, mileage=10000, location="Testville", is_new=False):
+    """Row."""
     return {
         "variant": variant,
         "age_months": age_months,

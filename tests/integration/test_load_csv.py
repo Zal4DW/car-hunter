@@ -18,7 +18,9 @@ _SPEC_OPTIONS = [
 
 
 class TestLoadCsvFatalBranches:
+    """Test Load Csv Fatal Branches test cases."""
     def test_missing_file_raises_systemexit(self, tmp_path):
+        """Missing file raises systemexit."""
         with pytest.raises(SystemExit) as exc_info:
             load_csv(str(tmp_path / "nope.csv"), _SPEC_OPTIONS)
         assert "not found" in str(exc_info.value).lower()
@@ -40,6 +42,7 @@ class TestLoadCsvFatalBranches:
         assert skipped == []
 
     def test_missing_required_column_raises_systemexit(self, tmp_path):
+        """Missing required column raises systemexit."""
         path = tmp_path / "bad.csv"
         path.write_text("variant,year,mileage\nBase,2023,15000\n")
         with pytest.raises(SystemExit) as exc_info:
@@ -51,6 +54,7 @@ class TestLoadCsvTolerantRows:
     """Bad individual rows are skipped with a reason, not fatal."""
 
     def test_non_numeric_price_skips_row_with_reason(self, tmp_path):
+        """Non numeric price skips row with reason."""
         path = tmp_path / "bad-row.csv"
         path.write_text(
             "variant,price,year,mileage\n"
@@ -77,6 +81,7 @@ class TestLoadCsvTolerantRows:
         assert rows[0]["mileage"] == 12400
 
     def test_bad_year_skips_row(self, tmp_path):
+        """Bad year skips row."""
         path = tmp_path / "bad-year.csv"
         path.write_text(
             "variant,price,year,mileage\n"
@@ -101,7 +106,9 @@ class TestLoadCsvTolerantRows:
 
 
 class TestLoadCsvHappyPath:
+    """Test Load Csv Happy Path test cases."""
     def test_row_count_and_basic_types(self, tmp_path):
+        """Row count and basic types."""
         path = tmp_path / "good.csv"
         path.write_text(
             "variant,price,year,mileage\n"
@@ -117,6 +124,7 @@ class TestLoadCsvHappyPath:
         assert rows[0]["mileage"] == 15000
 
     def test_spec_booleans_coerced_from_string(self, tmp_path):
+        """Spec booleans coerced from string."""
         path = tmp_path / "with-specs.csv"
         path.write_text(
             "variant,price,year,mileage,has_sunroof,has_audio\n"
@@ -144,6 +152,7 @@ class TestLoadCsvHappyPath:
         assert rows[2]["is_brand_new_stock"] is False
 
     def test_empty_optional_fields_default_safely(self, tmp_path):
+        """Empty optional fields default safely."""
         path = tmp_path / "sparse.csv"
         path.write_text(
             "variant,price,year,mileage,new_price,depreciation_pa\n"

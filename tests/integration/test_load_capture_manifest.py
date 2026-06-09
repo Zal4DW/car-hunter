@@ -26,12 +26,14 @@ class TestLoadCaptureManifestHappyPaths:
     """Badge classification matches source status aggregation."""
 
     def test_no_file_returns_grey_unknown_badge(self, tmp_path):
+        """No file returns grey unknown badge."""
         manifest, badge = load_capture_manifest(str(tmp_path), "acme", _TODAY)
         assert manifest is None
         assert badge["status"] == "unknown"
         assert badge["colour"] == "grey"
 
     def test_all_ok_sources_produce_green_badge(self, tmp_path):
+        """All ok sources produce green badge."""
         _write_manifest(tmp_path, "acme", _TODAY, {
             "sources": [
                 {"name": "autotrader", "status": "ok"},
@@ -44,6 +46,7 @@ class TestLoadCaptureManifestHappyPaths:
         assert "sources" in badge
 
     def test_one_partial_source_produces_amber_badge(self, tmp_path):
+        """One partial source produces amber badge."""
         _write_manifest(tmp_path, "acme", _TODAY, {
             "sources": [
                 {"name": "autotrader", "status": "ok"},
@@ -55,6 +58,7 @@ class TestLoadCaptureManifestHappyPaths:
         assert badge["colour"] == "amber"
 
     def test_any_failed_source_produces_red_badge(self, tmp_path):
+        """Any failed source produces red badge."""
         _write_manifest(tmp_path, "acme", _TODAY, {
             "sources": [
                 {"name": "autotrader", "status": "ok"},
@@ -81,6 +85,7 @@ class TestLoadCaptureManifestValidation:
     """Every SystemExit branch."""
 
     def test_malformed_json_raises_systemexit(self, tmp_path):
+        """Malformed json raises systemexit."""
         path = tmp_path / "acme-capture-2026-04-13.json"
         path.write_text("{not json")
         with pytest.raises(SystemExit) as exc_info:
@@ -88,18 +93,21 @@ class TestLoadCaptureManifestValidation:
         assert "not valid JSON" in str(exc_info.value)
 
     def test_non_dict_root_raises_systemexit(self, tmp_path):
+        """Non dict root raises systemexit."""
         _write_manifest(tmp_path, "acme", _TODAY, ["not", "a", "dict"])
         with pytest.raises(SystemExit) as exc_info:
             load_capture_manifest(str(tmp_path), "acme", _TODAY)
         assert "must contain a JSON object" in str(exc_info.value)
 
     def test_non_list_sources_raises_systemexit(self, tmp_path):
+        """Non list sources raises systemexit."""
         _write_manifest(tmp_path, "acme", _TODAY, {"sources": "not a list"})
         with pytest.raises(SystemExit) as exc_info:
             load_capture_manifest(str(tmp_path), "acme", _TODAY)
         assert "'sources' must be a list" in str(exc_info.value)
 
     def test_non_dict_source_entry_raises_systemexit(self, tmp_path):
+        """Non dict source entry raises systemexit."""
         _write_manifest(tmp_path, "acme", _TODAY, {
             "sources": [{"name": "ok"}, "not a dict"]
         })

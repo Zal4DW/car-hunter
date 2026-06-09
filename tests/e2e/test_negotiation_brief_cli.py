@@ -17,15 +17,18 @@ TIMEOUT = 60
 
 @pytest.fixture(scope="session")
 def brief_script(scripts_dir: Path) -> Path:
+    """Brief script."""
     return scripts_dir / "negotiation_brief.py"
 
 
 def _stage(tmp_path, fixture_dated_csvs):
+    """Stage."""
     for p in fixture_dated_csvs:
         (tmp_path / p.name).write_bytes(p.read_bytes())
 
 
 def _run(brief_script, profile, searches_dir, listing_id, subprocess_env):
+    """Run."""
     return subprocess.run(
         [sys.executable, str(brief_script),
          "--profile", str(profile),
@@ -36,10 +39,12 @@ def _run(brief_script, profile, searches_dir, listing_id, subprocess_env):
 
 
 class TestNegotiationBriefCli:
+    """Test Negotiation Brief Cli test cases."""
     def test_brief_json_contract(
         self, tmp_path, brief_script, fixture_profile_path,
         fixture_dated_csvs, subprocess_env,
     ):
+        """Brief json contract."""
         _stage(tmp_path, fixture_dated_csvs)
         result = _run(brief_script, fixture_profile_path, tmp_path,
                       "202601150000000", subprocess_env)
@@ -76,6 +81,7 @@ class TestNegotiationBriefCli:
         self, tmp_path, brief_script, fixture_profile_path,
         fixture_dated_csvs, subprocess_env,
     ):
+        """Sold listing fails helpfully."""
         _stage(tmp_path, fixture_dated_csvs)
         result = _run(brief_script, fixture_profile_path, tmp_path,
                       "999999999999999", subprocess_env)
@@ -87,6 +93,7 @@ class TestNegotiationBriefCli:
     def test_no_snapshots_fails_helpfully(
         self, tmp_path, brief_script, fixture_profile_path, subprocess_env,
     ):
+        """No snapshots fails helpfully."""
         result = _run(brief_script, fixture_profile_path, tmp_path,
                       "202601150000000", subprocess_env)
         assert result.returncode != 0

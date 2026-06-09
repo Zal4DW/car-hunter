@@ -663,6 +663,7 @@ def build_html(
 def main():
     # ── Argument parsing ────────────────────────────────────────────────
 
+    """Main."""
     parser = argparse.ArgumentParser(description="Build car value dashboard from profile and CSV data")
     parser.add_argument("--profile", required=True, help="Path to car-profile.json")
     parser.add_argument("--csv", default=None, help="Path to CSV data file")

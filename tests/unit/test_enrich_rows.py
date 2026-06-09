@@ -11,6 +11,7 @@ from build_dashboard import enrich_rows
 
 
 def _row(listing_id="", price=40000, location="Testville"):
+    """Row."""
     return {
         "listing_id": listing_id,
         "price": price,
@@ -25,6 +26,7 @@ class TestEnrichRowsInit:
     """Every row gets the same skeleton fields regardless of branch."""
 
     def test_all_rows_get_default_composite_and_flags(self):
+        """All rows get default composite and flags."""
         rows = [_row(price=35000, location="Bristol"), _row(price=42000, location="Leeds")]
         enrich_rows(
             rows, snapshots=[], watchlist={"listings": {}},
@@ -67,6 +69,7 @@ class TestEnrichRowsLidEncodedBranch:
         assert rows[0]["days_on_market"] is None
 
     def test_empty_listing_id_row_is_left_untouched(self):
+        """Empty listing id row is left untouched."""
         rows = [_row(listing_id="", price=25000)]
         enrich_rows(
             rows, snapshots=[], watchlist={"listings": {}},
@@ -80,6 +83,7 @@ class TestEnrichRowsWatchlist:
     """Watchlist join by listing_id."""
 
     def test_matching_listing_id_gets_watched_flag(self):
+        """Matching listing id gets watched flag."""
         rows = [_row(listing_id="202604010000123", price=40000)]
         watchlist = {"listings": {"202604010000123": {"note": "Check this"}}}
         enrich_rows(
@@ -105,6 +109,7 @@ class TestEnrichRowsSnapshotDiff:
     """Snapshot diff populates pulse and per-row price_change."""
 
     def test_prior_snapshot_diff_populates_pulse(self):
+        """Prior snapshot diff populates pulse."""
         prev_date = date(2026, 4, 10)
         rows = [_row(listing_id="lid-a", price=40000)]
         snapshots = [
@@ -135,6 +140,7 @@ class TestEnrichRowsSnapshotDiff:
         assert rows[0]["price_change"] == -2000
 
     def test_no_prior_snapshot_returns_default_pulse(self):
+        """No prior snapshot returns default pulse."""
         rows = [_row(listing_id="lid-a")]
         pulse = enrich_rows(
             rows, snapshots=[], watchlist={"listings": {}},

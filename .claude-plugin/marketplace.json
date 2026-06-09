@@ -11,7 +11,6 @@
       "name": "car-hunter",
       "displayName": "Car Hunter",
       "source": "./car-hunter",
-      "version": "2.1.0",
       "description": "Search UK car listings, track prices, and build buyer intelligence dashboards with regression-based value scoring.",
       "category": "productivity",
       "tags": ["car-search", "autotrader", "depreciation", "value-analysis", "dashboard"]
