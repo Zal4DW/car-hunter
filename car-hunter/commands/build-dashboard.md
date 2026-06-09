@@ -1,18 +1,12 @@
 ---
 description: Build or update the buyer intelligence dashboard for a tracked car
-allowed-tools: Read, Write, Bash
+argument-hint: "[car name, if you track more than one]"
+allowed-tools: Read, Write, Glob, Bash
 ---
 
-Build or update an interactive depreciation analysis dashboard for a tracked car. Uses regression modelling, value scoring, and Chart.js visualisations.
+Available profiles: !`ls "${CLAUDE_PLUGIN_DATA}/profiles/" 2>/dev/null || echo "(none yet - run /setup-car first)"`
+Active profile: !`cat "${CLAUDE_PLUGIN_DATA}/active-profile" 2>/dev/null || echo "(not set)"`
 
-Follow these steps:
+Build the interactive dashboard using the `car-value-dashboard` skill at `${CLAUDE_PLUGIN_ROOT}/skills/car-value-dashboard/SKILL.md` - read it and follow it; it defines the builder invocation (including `--summary-json`) and how to present the key findings.
 
-1. Read the available profiles in `${CLAUDE_PLUGIN_DATA}/profiles/` to find `.json` profile files. If the directory does not exist or is empty, instruct the user to run `/setup-car` first.
-2. If multiple profiles exist, ask the user which car to build the dashboard for.
-3. Load the selected car profile JSON from `${CLAUDE_PLUGIN_DATA}/profiles/{profile_name}.json`.
-4. Read the skill file at `${CLAUDE_PLUGIN_ROOT}/skills/car-value-dashboard/SKILL.md` for the full build process.
-5. Locate the latest CSV data file in the `{profile_name}-searches/` folder in the user's current workspace.
-6. Run the builder: `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/build_dashboard.py" --profile "${CLAUDE_PLUGIN_DATA}/profiles/{profile_name}.json" --csv <latest.csv>`. The script is fully config-driven and does not need to be edited or regenerated per profile.
-7. Present key findings (R-squared, top deals, spec premiums, flattening point).
-
-If $ARGUMENTS contains a car name that matches a profile, use that profile directly.
+Profile resolution: a car named in $ARGUMENTS wins, then the active profile, then the single existing profile, then ask. Locate the latest dated CSV in `{profile_name}-searches/` in the current workspace; if none exists, tell the user to run /search-cars first.

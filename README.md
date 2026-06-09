@@ -13,7 +13,7 @@ You don't need to know how to code. You just chat with Claude.
 - **Remembers what it's seen.** Every search gets saved. Next time, Car Hunter tells you which cars are new, which have sold, and which dealers have dropped the price.
 - **Tells you which cars are good value.** Not just "cheapest" - it works out what each car *should* cost given its age, mileage, trim and options, then flags the ones priced below that as genuine deals.
 - **Builds a beautiful interactive dashboard.** Depreciation curves, a negotiation radar to spot stale listings ripe for a cheeky offer, a spec-premium chart showing what each extra actually adds to the price, and a sortable table of every car on the market right now.
-- **Works for any car.** Audi e-tron GT, BMW M4, Tesla Model 3, Porsche Taycan, Volvo V60 - whatever you're hunting, tell Claude once and it learns the specifics.
+- **Works for any car - and more than one at a time.** Audi e-tron GT, BMW M4, Tesla Model 3, Porsche Taycan, Volvo V60 - whatever you're hunting, tell Claude once and it learns the specifics. Tracking a BMW *and* an Audi? Set up a profile for each and switch between them with `/use-car`.
 
 ## Getting started
 
@@ -35,9 +35,9 @@ Open Claude Cowork and type:
 /setup-car
 ```
 
-Claude will walk you through a friendly conversation - what make and model, what trim levels you're interested in, what your budget and maximum mileage are, how far you're willing to travel, which options matter to you (panoramic roof? premium audio? massage seats?), and which ones you'd consider deal-breakers.
+Claude asks just four things - which car, your budget and mileage cap, where you are and how far you'll travel, and which options you really care about (panoramic roof? premium audio? massage seats?). It researches the rest itself - trim levels, generations, list prices when new - and shows you a summary to confirm before saving. If you'd rather specify every detail yourself, just say so and Claude will walk through the full setup instead.
 
-This only takes a few minutes, and it's a one-time setup. Claude saves everything as your **car profile**.
+This only takes a couple of minutes, and it's a one-time setup per car. Claude saves everything as your **car profile** and checks it is valid on the spot.
 
 ### 4. Go hunting
 
@@ -63,6 +63,25 @@ Claude builds an interactive HTML dashboard from your searches and opens it in y
 - **Negotiation radar** plotting every car by "how long has it been listed" versus "how overpriced is it", so you can spot stale listings where the dealer will likely accept an offer.
 - **Market pulse** telling you how many cars are active, how many have sold since last time, how many are new arrivals, and the average days on market.
 - **Full sortable table** of every car, filterable by variant, generation, mileage, budget, and value rating.
+- **A watchlist that follows you.** Star interesting cars right in the dashboard - your stars survive rebuilds, and one click copies a sync command so Claude saves them permanently.
+
+### 6. Check in between searches
+
+```
+/car-pulse
+```
+
+The quick daily question - "anything new? anything dropped in price?" - answered in seconds from your saved search history, without rebuilding the dashboard or opening a browser.
+
+### Tracking more than one car
+
+Run `/setup-car` once per car - say, a BMW i4 and an Audi e-tron GT. Each gets its own profile, its own search history, and its own dashboard. Switch the default with:
+
+```
+/use-car bmw-i4
+```
+
+Or just name the car when you ask: `/search-cars audi` searches the Audi regardless of which profile is active.
 
 ## What you'll need
 
@@ -86,7 +105,8 @@ You do **not** need any coding experience, Python, command-line tools, or develo
 - **Claude says it can't reach the car sites.** Check that Chrome is open and that the Claude in Chrome extension is active and signed in.
 - **Claude can't find your profile.** Run `/setup-car` to create one. You need at least one profile before you can search.
 - **The dashboard looks empty.** Run `/search-cars` at least once first - the dashboard is built from your search history.
-- **You want to track a second car.** Just run `/setup-car` again. Car Hunter supports multiple profiles and will ask which one you mean.
+- **You want to track a second car.** Just run `/setup-car` again. Car Hunter supports multiple profiles - switch the default with `/use-car`, or name the car in any command.
+- **Some listings were skipped.** Car Hunter never throws away a whole day's search because one listing was odd - it skips the bad row, tells you which one and why, and shows a warning banner on the dashboard.
 
 ## Licence and honest disclaimers
 

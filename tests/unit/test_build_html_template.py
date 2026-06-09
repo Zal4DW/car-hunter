@@ -20,6 +20,7 @@ _TEMPLATE_PATH = SCRIPTS_DIR / "templates" / "dashboard.html"
 # Keep in sync with build_dashboard.py:main() and build_html().
 _EXPECTED_PLACEHOLDERS = {
     "DISPLAY_NAME",
+    "profile_name",
     "bg",
     "card_bg",
     "card_border",
@@ -143,7 +144,8 @@ def _minimal_build_html_kwargs():
         r_squared=0.0,
         today_str="12 April 2026",
         reg_count=0,
-        regression_warning=None,
+        warnings=[],
+        profile_name="test-car",
     )
 
 

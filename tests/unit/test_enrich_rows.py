@@ -1,13 +1,11 @@
 """Unit tests for build_dashboard.enrich_rows.
 
-Covers the two branches (has_listing_ids / legacy sidecar) and specifically
-the lid_encoding-enabled path which is effectively dead in e2e tests because
-the acme-bolt fixture ships with listing_id_date_encoding disabled.
+Covers the default-field initialisation, the lid_encoding-enabled path
+(effectively dead in e2e tests because the acme-bolt fixture ships with
+listing_id_date_encoding disabled), watchlist joins, and snapshot diffing.
 """
 
 from datetime import date
-
-import pytest
 
 from build_dashboard import enrich_rows
 
@@ -30,9 +28,7 @@ class TestEnrichRowsInit:
         rows = [_row(price=35000, location="Bristol"), _row(price=42000, location="Leeds")]
         enrich_rows(
             rows, snapshots=[], watchlist={"listings": {}},
-            listing_ids={}, price_changes={},
             lid_encoding={"enabled": False}, today=_TODAY,
-            has_listing_ids=False,
         )
         assert rows[0]["composite_key"] == "35000_Bristol"
         assert rows[1]["composite_key"] == "42000_Leeds"
@@ -53,9 +49,7 @@ class TestEnrichRowsLidEncodedBranch:
         rows = [_row(listing_id="202604010000123", price=40000)]
         enrich_rows(
             rows, snapshots=[], watchlist={"listings": {}},
-            listing_ids={}, price_changes={},
             lid_encoding={"enabled": True}, today=_TODAY,
-            has_listing_ids=True,
         )
         assert rows[0]["autotrader_url"] == (
             "https://www.autotrader.co.uk/car-details/202604010000123"
@@ -67,9 +61,7 @@ class TestEnrichRowsLidEncodedBranch:
         rows = [_row(listing_id="cinch:abc123def456", price=30000)]
         enrich_rows(
             rows, snapshots=[], watchlist={"listings": {}},
-            listing_ids={}, price_changes={},
             lid_encoding={"enabled": True}, today=_TODAY,
-            has_listing_ids=True,
         )
         assert rows[0]["autotrader_url"] is None
         assert rows[0]["days_on_market"] is None
@@ -78,25 +70,21 @@ class TestEnrichRowsLidEncodedBranch:
         rows = [_row(listing_id="", price=25000)]
         enrich_rows(
             rows, snapshots=[], watchlist={"listings": {}},
-            listing_ids={}, price_changes={},
             lid_encoding={"enabled": True}, today=_TODAY,
-            has_listing_ids=True,
         )
         assert rows[0]["autotrader_url"] is None
         assert rows[0]["days_on_market"] is None
 
 
 class TestEnrichRowsWatchlist:
-    """Watchlist join in the listing_id path."""
+    """Watchlist join by listing_id."""
 
     def test_matching_listing_id_gets_watched_flag(self):
         rows = [_row(listing_id="202604010000123", price=40000)]
         watchlist = {"listings": {"202604010000123": {"note": "Check this"}}}
         enrich_rows(
             rows, snapshots=[], watchlist=watchlist,
-            listing_ids={}, price_changes={},
             lid_encoding={"enabled": False}, today=_TODAY,
-            has_listing_ids=True,
         )
         assert rows[0]["watched"] is True
         assert rows[0]["watch_note"] == "Check this"
@@ -107,40 +95,10 @@ class TestEnrichRowsWatchlist:
         watchlist = {"listings": {"202604010000123": "legacy format"}}
         enrich_rows(
             rows, snapshots=[], watchlist=watchlist,
-            listing_ids={}, price_changes={},
             lid_encoding={"enabled": False}, today=_TODAY,
-            has_listing_ids=True,
         )
         assert rows[0]["watched"] is True
         assert rows[0]["watch_note"] == ""
-
-
-class TestEnrichRowsLegacySidecar:
-    """Legacy path: has_listing_ids=False, uses composite-key sidecar."""
-
-    def test_sidecar_listing_id_populates_url_when_encoded(self):
-        rows = [_row(price=40000, location="Bristol")]
-        listing_ids = {"40000_Bristol": "202604010000123"}
-        enrich_rows(
-            rows, snapshots=[], watchlist={"listings": {}},
-            listing_ids=listing_ids, price_changes={},
-            lid_encoding={"enabled": True}, today=_TODAY,
-            has_listing_ids=False,
-        )
-        assert rows[0]["autotrader_url"] == (
-            "https://www.autotrader.co.uk/car-details/202604010000123"
-        )
-        assert rows[0]["days_on_market"] == 12
-
-    def test_sidecar_price_changes_populate(self):
-        rows = [_row(price=40000, location="Bristol")]
-        enrich_rows(
-            rows, snapshots=[], watchlist={"listings": {}},
-            listing_ids={}, price_changes={"40000_Bristol": -500},
-            lid_encoding={"enabled": False}, today=_TODAY,
-            has_listing_ids=False,
-        )
-        assert rows[0]["price_change"] == -500
 
 
 class TestEnrichRowsSnapshotDiff:
@@ -168,9 +126,7 @@ class TestEnrichRowsSnapshotDiff:
         ]
         pulse = enrich_rows(
             rows, snapshots=snapshots, watchlist={"listings": {}},
-            listing_ids={}, price_changes={},
             lid_encoding={"enabled": False}, today=_TODAY,
-            has_listing_ids=True,
         )
         assert pulse["new"] == 0
         assert pulse["removed"] == 1
@@ -182,8 +138,16 @@ class TestEnrichRowsSnapshotDiff:
         rows = [_row(listing_id="lid-a")]
         pulse = enrich_rows(
             rows, snapshots=[], watchlist={"listings": {}},
-            listing_ids={}, price_changes={},
             lid_encoding={"enabled": False}, today=_TODAY,
-            has_listing_ids=True,
         )
         assert pulse == {"new": 0, "removed": 0, "price_drops": 0, "previous_date": None}
+
+    def test_rows_without_listing_id_keep_defaults(self):
+        """Rows lacking ids opt out of diffing but keep their default fields."""
+        rows = [_row(listing_id="", price=25000), _row(listing_id="lid-a", price=30000)]
+        enrich_rows(
+            rows, snapshots=[], watchlist={"listings": {}},
+            lid_encoding={"enabled": False}, today=_TODAY,
+        )
+        assert rows[0]["price_change"] == 0
+        assert rows[0]["watched"] is False

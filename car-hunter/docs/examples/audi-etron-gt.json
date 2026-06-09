@@ -1,0 +1,152 @@
+{
+  "_comment": "Example profile - a complete, valid starting template. Prices and specs are approximate; verify RRPs for your exact target before relying on depreciation figures. Replace postcode and filters with your own.",
+  "profile_name": "audi-etron-gt",
+  "display_name": "Audi e-tron GT",
+  "make": "Audi",
+  "fuel_type": "Electric",
+  "variants": [
+    {
+      "name": "e-tron GT quattro",
+      "tier": 0,
+      "colour": {
+        "border": "#3b82f6",
+        "bg": "rgba(59,130,246,0.15)",
+        "point": "#3b82f6"
+      },
+      "autotrader_model": "e-tron GT",
+      "standard_specs": []
+    },
+    {
+      "name": "RS e-tron GT",
+      "tier": 1,
+      "colour": {
+        "border": "#ef4444",
+        "bg": "rgba(239,68,68,0.15)",
+        "point": "#ef4444"
+      },
+      "autotrader_model": "RS e-tron GT",
+      "standard_specs": ["has_air_susp"]
+    }
+  ],
+  "generations": [
+    {
+      "name": "pre-facelift",
+      "label": "Pre-facelift (93.4kWh, 2021-2024)",
+      "year_from": 2021,
+      "year_to": 2024,
+      "detection_rules": {
+        "battery_kwh": 93.4,
+        "max_reg": "24",
+        "min_reg": "21"
+      },
+      "new_prices": {
+        "e-tron GT quattro": 88000,
+        "RS e-tron GT": 117000
+      }
+    },
+    {
+      "name": "facelift",
+      "label": "Facelift (105kWh, 2024-present)",
+      "year_from": 2024,
+      "year_to": null,
+      "detection_rules": {
+        "battery_kwh": 105,
+        "max_reg": null,
+        "min_reg": "74"
+      },
+      "new_prices": {
+        "e-tron GT quattro": 106000,
+        "RS e-tron GT": 126000
+      }
+    }
+  ],
+  "spec_options": [
+    {
+      "key": "has_bo",
+      "label": "B&O Sound",
+      "search_terms": ["B&O", "Bang & Olufsen", "Bang and Olufsen"],
+      "weight": 2,
+      "highlight": true
+    },
+    {
+      "key": "has_air_susp",
+      "label": "Air Suspension",
+      "search_terms": ["air suspension", "adaptive air"],
+      "weight": 1,
+      "highlight": false
+    },
+    {
+      "key": "has_pano",
+      "label": "Panoramic Roof",
+      "search_terms": ["panoramic", "pano roof", "glass roof"],
+      "weight": 1,
+      "highlight": true
+    },
+    {
+      "key": "has_matrix",
+      "label": "Matrix LED",
+      "search_terms": ["matrix led", "matrix headlights", "laser light"],
+      "weight": 1,
+      "highlight": false
+    },
+    {
+      "key": "has_massage",
+      "label": "Massage Seats",
+      "search_terms": ["massage"],
+      "weight": 1,
+      "highlight": false
+    }
+  ],
+  "search_filters": {
+    "postcode": "SW1A 1AA",
+    "location_description": "central London (replace with your own)",
+    "max_price": 70000,
+    "max_mileage": 50000,
+    "min_year": 2021,
+    "max_distance": 200,
+    "exclude_write_offs": true
+  },
+  "search_urls": {
+    "autotrader": {
+      "base": "https://www.autotrader.co.uk/car-search",
+      "params": {
+        "make": "Audi",
+        "fuel-type": "Electric",
+        "include-delivery-option": "on",
+        "sort": "price-asc"
+      }
+    },
+    "additional_sites": [
+      {"name": "Cinch", "url": "https://www.cinch.co.uk/used-cars/audi/e-tron-gt"},
+      {"name": "Audi Approved Used", "url": "https://www.audi.co.uk/uk/web/en/used-cars.html"}
+    ],
+    "dealer_groups": []
+  },
+  "listing_id_date_encoding": {
+    "enabled": true,
+    "source": "autotrader",
+    "format": "YYYYMMDD prefix"
+  },
+  "reg_date_mapping": {
+    "21": 2021.25, "71": 2021.75,
+    "22": 2022.25, "72": 2022.75,
+    "23": 2023.25, "73": 2023.75,
+    "24": 2024.25, "74": 2024.75,
+    "25": 2025.25, "75": 2025.75,
+    "26": 2026.25, "76": 2026.75
+  },
+  "dashboard": {
+    "title": "Audi e-tron GT - Buyer Intelligence",
+    "theme": {
+      "bg": "#0f1117",
+      "card_bg": "#1a1a2e",
+      "card_border": "#2a2a3e",
+      "text": "#e4e4e7",
+      "text_muted": "#9ca3af"
+    },
+    "mileage_filter_options": [10000, 20000, 30000, 50000],
+    "mileage_filter_default": 50000,
+    "budget_filter_options": [50000, 60000, 70000],
+    "budget_filter_default": 70000
+  }
+}

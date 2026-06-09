@@ -2,6 +2,8 @@
 
 This document defines the `car-profile.json` schema used by the car-hunter plugin. Each profile describes a single car model (or family of variants) that the user wants to track on the used market.
 
+Complete, valid example profiles live in `docs/examples/` - start from the closest one rather than building from scratch. Profiles can be validated without building anything: `python3 scripts/build_dashboard.py --profile <path> --validate-profile`.
+
 ## Schema Definition
 
 ```json

@@ -63,6 +63,8 @@
     .capture-badge-grey { background: rgba(100,116,139,0.15); color: #94a3b8; border: 1px solid rgba(100,116,139,0.4); }
     .star-btn { background: none; border: none; cursor: pointer; font-size: 16px; padding: 0 4px; color: #6b7280; }
     .star-btn.active { color: #fbbf24; }
+    .sync-watch-btn { background: #1e293b; color: #e2e8f0; border: 1px solid #334155; border-radius: 6px; padding: 6px 12px; font-size: 12px; cursor: pointer; }
+    .sync-watch-btn:hover { border-color: #64748b; }
     .toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); background: #1e293b; color: #fff; padding: 12px 20px; border-radius: 8px; border: 1px solid #334155; font-size: 13px; opacity: 0; transition: opacity 0.2s; pointer-events: none; z-index: 1000; }
     .toast.show { opacity: 1; }
     .pulse-row-label { font-size: 11px; color: $text_muted; text-transform: uppercase; letter-spacing: 0.05em; margin: 12px 0 6px; }
@@ -136,6 +138,10 @@
                     <option value="all">All</option>
                     <option value="watched">Watched only</option>
                 </select>
+            </div>
+            <div class="filter-group">
+                <label>&nbsp;</label>
+                <button id="syncWatchlistBtn" class="sync-watch-btn" onclick="copyWatchlistSync()" title="Copy a /watch-car sync command for Claude so stars survive rebuilds">Sync watchlist</button>
             </div>
         </div>
 
@@ -234,8 +240,67 @@
     const TIME_SERIES = $time_series_json;
     const PULSE_SINCE = $snapshot_pulse_json;
     const CAPTURE = $capture_json;
+    const PROFILE_NAME = $profile_name;
 
     let charts = {};
+
+    // ── Local watchlist persistence ─────────────────────────────────────
+    // Stars toggled in the browser are kept in localStorage so they survive
+    // page reloads and dashboard rebuilds without a round-trip through
+    // Claude. "Sync watchlist" copies a /watch-car sync command that makes
+    // the file on disk match what is shown here.
+
+    const WATCH_STORAGE_KEY = 'car-hunter-watch-' + PROFILE_NAME;
+
+    function loadLocalStars() {
+        try { return JSON.parse(localStorage.getItem(WATCH_STORAGE_KEY)) || {}; }
+        catch (e) { return {}; }
+    }
+
+    function saveLocalStars(stars) {
+        try { localStorage.setItem(WATCH_STORAGE_KEY, JSON.stringify(stars)); }
+        catch (e) { /* private browsing - stars last for this page view only */ }
+    }
+
+    // Overlay local toggles onto the embedded data. An entry is either
+    // {note, added} (starred locally) or {removed: true} (unstarred locally,
+    // overriding the embedded watchlist file).
+    const localStars = loadLocalStars();
+    ALL_DATA.forEach(r => {
+        const entry = r.listing_id ? localStars[r.listing_id] : null;
+        if (!entry) return;
+        if (entry.removed) {
+            r.watched = false;
+            r.watch_note = '';
+        } else {
+            r.watched = true;
+            if (!r.watch_note) r.watch_note = entry.note || '';
+        }
+    });
+
+    function mergedWatchlist() {
+        const listings = {};
+        Object.entries(WATCHLIST.listings || {}).forEach(([id, entry]) => {
+            listings[id] = (entry && typeof entry === 'object') ? entry : { note: '' };
+        });
+        Object.entries(localStars).forEach(([id, entry]) => {
+            if (entry.removed) delete listings[id];
+            else listings[id] = { note: entry.note || '', added: entry.added || '' };
+        });
+        return { listings: listings };
+    }
+
+    function copyWatchlistSync() {
+        const command = '/watch-car sync ' + JSON.stringify(mergedWatchlist());
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(command).then(
+                () => showToast('Copied - paste into Claude to save your stars'),
+                () => showToast('Copy failed - command: ' + command)
+            );
+        } else {
+            showToast('Run in Claude: ' + command);
+        }
+    }
 
     function getFilteredData() {
         const variant = document.getElementById('filterVariant').value;
@@ -390,15 +455,26 @@
 
     function toggleStar(listingId) {
         if (!listingId) return;
-        const command = '/watch-car add ' + listingId + ' "note"';
-        if (navigator.clipboard && navigator.clipboard.writeText) {
-            navigator.clipboard.writeText(command).then(
-                () => showToast('Copied: ' + command),
-                () => showToast('Copy failed - command: ' + command)
-            );
+        const rows = ALL_DATA.filter(r => r.listing_id === listingId);
+        if (!rows.length) return;
+        const nowWatched = !rows[0].watched;
+        rows.forEach(r => {
+            r.watched = nowWatched;
+            if (!nowWatched) r.watch_note = '';
+        });
+        if (nowWatched) {
+            localStars[listingId] = { note: '', added: new Date().toISOString().slice(0, 10) };
+        } else if ((WATCHLIST.listings || {})[listingId]) {
+            // Star exists in the on-disk watchlist - record an override.
+            localStars[listingId] = { removed: true };
         } else {
-            showToast('Run in Claude: ' + command);
+            delete localStars[listingId];
         }
+        saveLocalStars(localStars);
+        updateAll();
+        showToast(nowWatched
+            ? 'Starred - use "Sync watchlist" to save it with Claude'
+            : 'Unstarred - use "Sync watchlist" to save the change');
     }
 
     function updateDepCurveChart() {
