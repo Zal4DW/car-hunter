@@ -13,6 +13,8 @@ You don't need to know how to code. You just chat with Claude.
 - **Remembers what it's seen.** Every search gets saved. Next time, Car Hunter tells you which cars are new, which have sold, and which dealers have dropped the price.
 - **Tells you which cars are good value.** Not just "cheapest" - it works out what each car *should* cost given its age, mileage, trim and options, then flags the ones priced below that as genuine deals.
 - **Builds a beautiful interactive dashboard.** Depreciation curves, a negotiation radar to spot stale listings ripe for a cheeky offer, a spec-premium chart showing what each extra actually adds to the price, and a sortable table of every car on the market right now.
+- **Answers "what can I get for £40k?"** Compare every car you're tracking at your budget - which gets you the newest example, which holds its value best, and the single best-value pick for each.
+- **Coaches your negotiation.** When you've found the one, Car Hunter builds an evidence pack (days on market, price cuts, cheaper comparables) and gives you an opening offer, a target, a walk-away number, and counters to the dealer's standard moves.
 - **Works for any car - and any number of them.** Audi e-tron GT, BMW M4, Tesla Model 3, Porsche Taycan, Volvo V60 - whatever you're hunting, tell Claude once and it learns the specifics. Hunt a single car, or set up a profile for each candidate you're weighing up and switch between them with `/use-car`.
 
 ## Getting started
@@ -99,6 +101,21 @@ Found the one? Car Hunter becomes your negotiation coach. It builds an evidence 
 
 The question every cross-shopper actually has: **"what can I get for £40,000?"** Car Hunter answers it across every car you track (or just the ones you name): how many listings are in budget for each car, the newest year and lowest mileage your money reaches, what a typical example looks like, which car holds its value best, and the single best-value pick for each - scored against that car's own market, so a bargain i4 and a bargain e-tron GT are each judged fairly. It works for one car too: `/compare-cars 40k` on a single profile shows what the budget buys across that car's trims and generations.
 
+## Command reference
+
+| Command | What it does |
+|---|---|
+| `/setup-car [car]` | Create or update a car profile. Quick setup asks four questions; Claude researches the rest. |
+| `/search-cars [car or filters]` | Search every configured site, deduplicate, and save the dated report, CSV, and capture record. |
+| `/build-dashboard [car]` | Build the interactive HTML dashboard from your search history. |
+| `/car-pulse [car]` | Quick digest of what changed since the last search - new cars, removals, price drops. |
+| `/compare-cars [budget] [cars]` | "What can I get for £40k?" - compare your tracked cars at a budget. |
+| `/help-me-negotiate <listing>` | Evidence-backed negotiation coaching for a specific car. |
+| `/watch-car add/remove/list/sync` | Manage your starred watchlist. |
+| `/use-car <car>` | Switch which profile the other commands use by default. |
+
+Every command accepts a car name when you track more than one profile - or just relies on the active profile when you don't.
+
 ## What you'll need
 
 - **Claude Cowork** subscription
@@ -110,10 +127,10 @@ You do **not** need any coding experience, Python, command-line tools, or develo
 
 ## Tips for getting the most out of it
 
-- **Run searches regularly.** The real power comes from tracking changes over time. Weekly or fortnightly is ideal.
+- **Run searches regularly.** The real power comes from tracking changes over time. Weekly or fortnightly is ideal - and `/car-pulse` makes the in-between check-ins free.
 - **Be honest about your must-haves.** The fewer truly essential options you mark, the more cars you'll see. Be strict about the things you really care about and flexible about the rest.
 - **Trust the value score, but verify in person.** Car Hunter is brilliant at finding cars that look like good deals on paper. It cannot check service history, smell the interior, or hear the suspension creaking. Always inspect before you buy.
-- **Use the negotiation radar before making an offer.** Cars that have been sitting on a forecourt for 60+ days are much more negotiable than last week's arrivals.
+- **Use the negotiation radar before making an offer.** Cars that have been sitting on a forecourt for 60+ days are much more negotiable than last week's arrivals - then run `/help-me-negotiate` to turn that into an actual offer strategy.
 - **Update your profile as your search evolves.** Learned that you actually *do* care about the cold-weather pack? Run `/setup-car` again and add it.
 
 ## Something not working?
