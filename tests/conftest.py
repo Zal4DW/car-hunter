@@ -81,12 +81,6 @@ def fixture_sparse_csv_path() -> Path:
 
 
 @pytest.fixture(scope="session")
-def fixture_listing_state_path() -> Path:
-    """Fixture listing state path."""
-    return FIXTURES_DIR / "acme-bolt-listing-state.json"
-
-
-@pytest.fixture(scope="session")
 def fixture_dated_csvs() -> list[Path]:
     """Fixture dated csvs."""
     return [

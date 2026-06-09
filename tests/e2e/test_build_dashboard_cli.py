@@ -480,20 +480,22 @@ class TestBuilderFailsHelpfully:
         assert "missing required" in combined.lower()
         assert "price" in combined
 
-    def test_csv_row_with_non_numeric_price(
+    def test_csv_row_with_non_numeric_price_is_skipped_not_fatal(
         self,
         tmp_path: Path,
         builder_script: Path,
         fixture_profile_path: Path,
+        fixture_csv_path: Path,
         subprocess_env: dict,
     ):
-        """CSV row with non-numeric price gives a clear error naming the row and field."""
+        """A bad row is skipped with a visible warning naming the row and
+        value - it must not abort the whole build."""
         bad_csv = tmp_path / "bad-row.csv"
         bad_csv.write_text(
-            "variant,price,year,mileage\n"
-            "Bolt Base,35000,2023,15000\n"
-            "Bolt Sport,TBC,2024,10000\n"
+            fixture_csv_path.read_text()
+            + "Bolt Sport,mk1,TBC,2024,74,2024.5,1.0,10000,52000,0,0,True,False,False,1,Testville,False\n"
         )
+        output_html = tmp_path / "dash.html"
         result = subprocess.run(
             [
                 sys.executable,
@@ -502,16 +504,23 @@ class TestBuilderFailsHelpfully:
                 str(fixture_profile_path),
                 "--csv",
                 str(bad_csv),
+                "--output",
+                str(output_html),
+                "--date",
+                "2026-04-10",
             ],
             capture_output=True,
             text=True,
             env=subprocess_env,
             timeout=BUILDER_TIMEOUT_SECONDS,
         )
-        assert result.returncode != 0
+        assert result.returncode == 0, f"builder failed: {result.stderr}"
         combined = result.stderr + result.stdout
-        assert "row 2" in combined.lower() or "row 2" in combined
         assert "TBC" in combined
+        assert "skipping" in combined.lower()
+        # The warning must also reach the rendered dashboard.
+        html = output_html.read_text()
+        assert "could not be parsed" in html
 
     def test_bad_date_argument(
         self,
@@ -543,27 +552,19 @@ class TestBuilderFailsHelpfully:
         assert "Traceback" not in combined
         assert "--date" in combined or "YYYY-MM-DD" in combined
 
-    def test_malformed_listing_state_json(
+    def test_missing_csv_flag_without_validate_mode(
         self,
-        tmp_path: Path,
         builder_script: Path,
         fixture_profile_path: Path,
-        fixture_csv_path: Path,
         subprocess_env: dict,
     ):
-        """Corrupt listing-state JSON gives a clear error, not a raw traceback."""
-        bad_state = tmp_path / "bad-state.json"
-        bad_state.write_text("{not json")
+        """--csv is required for a build (only --validate-profile waives it)."""
         result = subprocess.run(
             [
                 sys.executable,
                 str(builder_script),
                 "--profile",
                 str(fixture_profile_path),
-                "--csv",
-                str(fixture_csv_path),
-                "--listing-state",
-                str(bad_state),
             ],
             capture_output=True,
             text=True,
@@ -571,8 +572,7 @@ class TestBuilderFailsHelpfully:
             timeout=BUILDER_TIMEOUT_SECONDS,
         )
         assert result.returncode != 0
-        combined = result.stderr + result.stdout
-        assert "listing state" in combined.lower() or "invalid json" in combined.lower()
+        assert "--csv" in (result.stderr + result.stdout)
 
 
 class TestBuilderEdgeCases:
@@ -736,124 +736,126 @@ class TestBuilderEdgeCases:
         assert "Mk1" in html
         assert "Mk2" in html
 
-    def test_listing_state_sidecar_populates_autotrader_urls(
+    def test_validate_profile_mode_exits_without_building(
         self,
         tmp_path: Path,
         builder_script: Path,
-        fixture_multigen_profile_path: Path,
-        fixture_csv_path: Path,
-        fixture_listing_state_path: Path,
+        fixture_profile_path: Path,
         subprocess_env: dict,
     ):
-        """The multigen fixture has listing_id_date_encoding enabled. When
-        a --listing-state sidecar provides matching composite keys the
-        builder must construct AutoTrader URLs and calculate days-on-market
-        for those rows.
-        """
-        result, output_html = self._run(
-            builder_script,
-            fixture_multigen_profile_path,
-            fixture_csv_path,
-            tmp_path,
-            subprocess_env,
-            extra_args=["--listing-state", str(fixture_listing_state_path)],
+        """--validate-profile validates and exits cleanly, no CSV needed."""
+        result = subprocess.run(
+            [
+                sys.executable,
+                str(builder_script),
+                "--profile",
+                str(fixture_profile_path),
+                "--validate-profile",
+            ],
+            capture_output=True,
+            text=True,
+            env=subprocess_env,
+            timeout=BUILDER_TIMEOUT_SECONDS,
         )
-        assert result.returncode == 0, f"builder failed: {result.stderr}"
-        assert "Loaded listing state" in result.stdout
-        assert "5 listing IDs" in result.stdout
-        assert "4 price changes" in result.stdout
-        html = output_html.read_text()
-        # The AutoTrader URL for at least one listing should appear in the
-        # embedded table data.
-        assert "autotrader.co.uk/car-details/202601150000001" in html
+        assert result.returncode == 0, f"validate failed: {result.stderr}"
+        assert "is valid" in result.stdout
+        assert "Acme Bolt EV" in result.stdout
 
-    def test_listing_state_sidecar_auto_detected_by_profile_name(
+    def test_validate_profile_mode_rejects_bad_profile(
         self,
         tmp_path: Path,
         builder_script: Path,
-        fixture_multigen_profile_path: Path,
-        fixture_csv_path: Path,
-        fixture_listing_state_path: Path,
+        fixture_profile_path: Path,
         subprocess_env: dict,
     ):
-        """If --listing-state is not passed, the builder auto-detects a
-        sidecar named `{profile_name}-listing-state.json` next to the CSV.
-        This test stages both the CSV and the sidecar in a tmp directory
-        with the expected filename and runs the builder without the flag.
-        """
-        staged_csv = tmp_path / "acme-bolt-listings.csv"
-        staged_csv.write_bytes(fixture_csv_path.read_bytes())
-        staged_sidecar = tmp_path / "acme-bolt-multigen-listing-state.json"
-        staged_sidecar.write_bytes(fixture_listing_state_path.read_bytes())
-
-        result, output_html = self._run(
-            builder_script,
-            fixture_multigen_profile_path,
-            staged_csv,
-            tmp_path,
-            subprocess_env,
-        )
-        assert result.returncode == 0, f"builder failed: {result.stderr}"
-        assert "Loaded listing state" in result.stdout, (
-            "auto-detected sidecar was not picked up"
-        )
-        assert "5 listing IDs" in result.stdout
-        html = output_html.read_text()
-        assert "autotrader.co.uk/car-details/202601150000001" in html
-
-    @pytest.mark.parametrize(
-        "bad_content,expected_token",
-        [
-            # _state itself not a dict (JSON array instead)
-            ('["not", "an", "object"]', "must contain a JSON object"),
-            # listing_ids is not a dict
-            ('{"listing_ids": "not-a-dict"}', "listing_ids"),
-            # price_changes is not a dict
-            ('{"listing_ids": {}, "price_changes": [1, 2, 3]}', "price_changes"),
-            # listing_ids has a non-string value
-            ('{"listing_ids": {"42500_Testville": 12345}}', "listing_ids"),
-            # price_changes has a non-numeric value
-            (
-                '{"listing_ids": {}, "price_changes": {"42500_Testville": "wat"}}',
-                "price_changes",
-            ),
-        ],
-        ids=[
-            "state-not-object",
-            "listing-ids-not-dict",
-            "price-changes-not-dict",
-            "listing-ids-non-string-value",
-            "price-changes-non-numeric-value",
-        ],
-    )
-    def test_malformed_listing_state_fails_loudly(
-        self,
-        tmp_path: Path,
-        builder_script: Path,
-        fixture_multigen_profile_path: Path,
-        fixture_csv_path: Path,
-        subprocess_env: dict,
-        bad_content: str,
-        expected_token: str,
-    ):
-        """Every validation branch in the sidecar loader should exit
-        non-zero with a descriptive error message. Covers the four
-        `raise SystemExit` checks added to fail loudly on malformed
-        sidecars instead of silently falling back to empty dicts.
-        """
-        bad_sidecar = tmp_path / "bad-state.json"
-        bad_sidecar.write_text(bad_content)
-
-        result, _ = self._run(
-            builder_script,
-            fixture_multigen_profile_path,
-            fixture_csv_path,
-            tmp_path,
-            subprocess_env,
-            extra_args=["--listing-state", str(bad_sidecar)],
+        """--validate-profile surfaces schema mistakes at setup time."""
+        import json
+        base = json.loads(fixture_profile_path.read_text())
+        del base["variants"][0]["tier"]
+        bad_profile = tmp_path / "bad.json"
+        bad_profile.write_text(json.dumps(base))
+        result = subprocess.run(
+            [
+                sys.executable,
+                str(builder_script),
+                "--profile",
+                str(bad_profile),
+                "--validate-profile",
+            ],
+            capture_output=True,
+            text=True,
+            env=subprocess_env,
+            timeout=BUILDER_TIMEOUT_SECONDS,
         )
         assert result.returncode != 0
-        assert expected_token in (result.stderr + result.stdout)
+        assert "tier" in (result.stderr + result.stdout).lower()
+
+    def test_summary_json_written_with_key_findings(
+        self,
+        tmp_path: Path,
+        builder_script: Path,
+        fixture_profile_path: Path,
+        fixture_csv_path: Path,
+        subprocess_env: dict,
+    ):
+        """--summary-json emits machine-readable findings for the skill layer."""
+        import json
+        summary_path = tmp_path / "summary.json"
+        result, _ = self._run(
+            builder_script,
+            fixture_profile_path,
+            fixture_csv_path,
+            tmp_path,
+            subprocess_env,
+            extra_args=["--summary-json", str(summary_path)],
+        )
+        assert result.returncode == 0, f"builder failed: {result.stderr}"
+        assert summary_path.is_file()
+        summary = json.loads(summary_path.read_text())
+        assert summary["profile"] == "acme-bolt"
+        assert summary["date"] == "2026-04-10"
+        assert summary["regression"]["rows"] == 18
+        assert 0 <= summary["regression"]["r_squared"] <= 1
+        assert len(summary["top_deals"]) > 0
+        deal = summary["top_deals"][0]
+        assert {"variant", "price", "predicted", "deviation_pct"} <= set(deal)
+        # Best deal first.
+        pcts = [d["deviation_pct"] for d in summary["top_deals"]]
+        assert pcts == sorted(pcts)
+
+    def test_build_date_defaults_to_csv_filename_date(
+        self,
+        tmp_path: Path,
+        builder_script: Path,
+        fixture_profile_path: Path,
+        fixture_dated_csvs: list,
+        subprocess_env: dict,
+    ):
+        """Without --date, the date tag in the CSV filename anchors the build
+        so rebuilding a day later still diffs against the right snapshot."""
+        for p in fixture_dated_csvs:
+            (tmp_path / p.name).write_bytes(p.read_bytes())
+        latest = tmp_path / "acme-bolt-all-listings-2026-04-10.csv"
+        output_html = tmp_path / "dash.html"
+        result = subprocess.run(
+            [
+                sys.executable,
+                str(builder_script),
+                "--profile",
+                str(fixture_profile_path),
+                "--csv",
+                str(latest),
+                "--output",
+                str(output_html),
+            ],
+            capture_output=True,
+            text=True,
+            env=subprocess_env,
+            timeout=BUILDER_TIMEOUT_SECONDS,
+        )
+        assert result.returncode == 0, f"builder failed: {result.stderr}"
+        assert "Using CSV snapshot date 2026-04-10" in result.stdout
+        assert "Snapshot diff vs 2026-03-27" in result.stdout
 
 
 class TestSnapshotPipeline:

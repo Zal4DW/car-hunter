@@ -1,0 +1,150 @@
+{
+  "_comment": "Example profile - a complete, valid starting template for a single-generation car. Prices and specs are approximate; verify RRPs for your exact target. Replace postcode and filters with your own.",
+  "profile_name": "bmw-i4",
+  "display_name": "BMW i4",
+  "make": "BMW",
+  "fuel_type": "Electric",
+  "variants": [
+    {
+      "name": "i4 eDrive35",
+      "tier": 0,
+      "colour": {
+        "border": "#22c55e",
+        "bg": "rgba(34,197,94,0.15)",
+        "point": "#22c55e"
+      },
+      "autotrader_model": "i4",
+      "standard_specs": []
+    },
+    {
+      "name": "i4 eDrive40",
+      "tier": 1,
+      "colour": {
+        "border": "#3b82f6",
+        "bg": "rgba(59,130,246,0.15)",
+        "point": "#3b82f6"
+      },
+      "autotrader_model": "i4",
+      "standard_specs": []
+    },
+    {
+      "name": "i4 M50",
+      "tier": 2,
+      "colour": {
+        "border": "#ef4444",
+        "bg": "rgba(239,68,68,0.15)",
+        "point": "#ef4444"
+      },
+      "autotrader_model": "i4",
+      "standard_specs": ["has_adaptive_susp"]
+    }
+  ],
+  "generations": [
+    {
+      "name": "g26",
+      "label": "G26 (2021-present)",
+      "year_from": 2021,
+      "year_to": null,
+      "detection_rules": {
+        "battery_kwh": 83.9,
+        "max_reg": null,
+        "min_reg": "21"
+      },
+      "new_prices": {
+        "i4 eDrive35": 51000,
+        "i4 eDrive40": 60000,
+        "i4 M50": 70000
+      }
+    }
+  ],
+  "spec_options": [
+    {
+      "key": "has_harman",
+      "label": "Harman Kardon",
+      "search_terms": ["harman kardon", "harman/kardon"],
+      "weight": 1,
+      "highlight": true
+    },
+    {
+      "key": "has_hud",
+      "label": "Head-up Display",
+      "search_terms": ["head-up display", "head up display", "HUD"],
+      "weight": 1,
+      "highlight": false
+    },
+    {
+      "key": "has_adaptive_susp",
+      "label": "Adaptive Suspension",
+      "search_terms": ["adaptive suspension", "adaptive M suspension"],
+      "weight": 1,
+      "highlight": false
+    },
+    {
+      "key": "has_sunroof",
+      "label": "Sunroof",
+      "search_terms": ["sunroof", "glass roof"],
+      "weight": 1,
+      "highlight": false
+    },
+    {
+      "key": "has_tech_pack",
+      "label": "Technology Pack",
+      "search_terms": ["technology pack", "tech pack", "technology plus"],
+      "weight": 2,
+      "highlight": true
+    }
+  ],
+  "search_filters": {
+    "postcode": "M1 1AE",
+    "location_description": "central Manchester (replace with your own)",
+    "max_price": 45000,
+    "max_mileage": 60000,
+    "min_year": 2021,
+    "max_distance": 150,
+    "exclude_write_offs": true
+  },
+  "search_urls": {
+    "autotrader": {
+      "base": "https://www.autotrader.co.uk/car-search",
+      "params": {
+        "make": "BMW",
+        "model": "i4",
+        "fuel-type": "Electric",
+        "include-delivery-option": "on",
+        "sort": "price-asc"
+      }
+    },
+    "additional_sites": [
+      {"name": "Cinch", "url": "https://www.cinch.co.uk/used-cars/bmw/i4"},
+      {"name": "BMW Approved Used", "url": "https://usedcars.bmw.co.uk/"}
+    ],
+    "dealer_groups": []
+  },
+  "listing_id_date_encoding": {
+    "enabled": true,
+    "source": "autotrader",
+    "format": "YYYYMMDD prefix"
+  },
+  "reg_date_mapping": {
+    "21": 2021.25, "71": 2021.75,
+    "22": 2022.25, "72": 2022.75,
+    "23": 2023.25, "73": 2023.75,
+    "24": 2024.25, "74": 2024.75,
+    "25": 2025.25, "75": 2025.75,
+    "26": 2026.25, "76": 2026.75
+  },
+  "dashboard": {
+    "title": "BMW i4 - Buyer Intelligence",
+    "theme": {
+      "bg": "#0f1117",
+      "card_bg": "#1a1a2e",
+      "card_border": "#2a2a3e",
+      "text": "#e4e4e7",
+      "text_muted": "#9ca3af"
+    },
+    "mileage_filter_options": [10000, 20000, 30000, 60000],
+    "mileage_filter_default": 60000,
+    "budget_filter_options": [35000, 40000, 45000],
+    "budget_filter_default": 45000
+  }
+}

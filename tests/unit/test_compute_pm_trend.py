@@ -6,10 +6,12 @@ from dashboard_lib import compute_pm_trend
 
 
 def _row(mileage, price):
+    """Row."""
     return {"mileage": mileage, "price": price}
 
 
 class TestComputePmTrend:
+    """Test Compute Pm Trend test cases."""
     def test_too_few_rows_returns_empty(self):
         """5 or fewer rows produces no trendline."""
         rows = [_row(m, 30000 - m) for m in range(5)]
@@ -36,6 +38,7 @@ class TestComputePmTrend:
         assert len(singular) >= 1
 
     def test_empty_rows_returns_empty(self):
+        """Empty rows returns empty."""
         trend, singular = compute_pm_trend([])
         assert trend == []
         assert singular == []

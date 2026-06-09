@@ -13,11 +13,14 @@ from build_dashboard import load_watchlist
 
 
 class TestLoadWatchlist:
+    """Test Load Watchlist test cases."""
     def test_missing_file_returns_empty_listings(self, tmp_path):
+        """Missing file returns empty listings."""
         result = load_watchlist(str(tmp_path), "acme")
         assert result == {"listings": {}}
 
     def test_malformed_json_raises_systemexit(self, tmp_path):
+        """Malformed json raises systemexit."""
         path = tmp_path / "acme-watchlist.json"
         path.write_text("{not json")
         with pytest.raises(SystemExit) as exc_info:
@@ -25,6 +28,7 @@ class TestLoadWatchlist:
         assert "not valid JSON" in str(exc_info.value)
 
     def test_happy_path_returns_listings(self, tmp_path):
+        """Happy path returns listings."""
         path = tmp_path / "acme-watchlist.json"
         path.write_text(json.dumps({
             "listings": {

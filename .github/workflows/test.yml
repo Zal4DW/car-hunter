@@ -31,6 +31,9 @@ jobs:
       - name: Run integration tests
         run: python -m pytest tests/integration -v
 
+      - name: Run plugin hygiene checks (version sync, frontmatter, examples)
+        run: python -m pytest tests/repo -v
+
       - name: Run end-to-end tests with coverage
         run: |
           rm -f .coverage .coverage.*

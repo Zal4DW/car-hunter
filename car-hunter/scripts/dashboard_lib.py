@@ -112,8 +112,16 @@ def js_safe(obj):
     """JSON-serialise an object for embedding in the dashboard JS.
 
     Uses `default=str` so date/datetime values survive without raising.
+    Escapes `</` so a scraped string containing `</script>` cannot break
+    out of the inline <script> block, and the JS line separators U+2028
+    and U+2029 which are valid JSON but illegal in JS string literals.
     """
-    return json.dumps(obj, default=str)
+    return (
+        json.dumps(obj, default=str)
+        .replace("</", "<\\/")
+        .replace("\u2028", "\\u2028")
+        .replace("\u2029", "\\u2029")
+    )
 
 
 def spec_labels(row, spec_options):
@@ -254,6 +262,104 @@ def rolling_window(dated_snapshots, today, days=28):
             "median": median,
         })
     return series
+
+
+# Declarative shape spec for profile validation: each entry is
+# (key, expected_type, required_subkeys). Subkeys apply to dict values, or to
+# every element of list values.
+_PROFILE_SPEC = (
+    ("variants", list, ("name", "tier", "colour")),
+    ("generations", list, ("name", "label", "year_from")),
+    ("spec_options", list, ("key", "label", "weight")),
+    ("search_filters", dict, ("max_price", "max_mileage", "max_distance", "postcode")),
+    ("dashboard", dict, ()),
+)
+
+_REQUIRED_PROFILE_KEYS = (
+    "profile_name", "display_name", "variants", "generations",
+    "spec_options", "search_filters", "dashboard",
+)
+
+_REQUIRED_THEME_KEYS = ("bg", "card_bg", "card_border", "text", "text_muted")
+
+
+def validate_profile(profile, source="profile"):
+    """Validate a parsed car-profile dict against the schema's required shape.
+
+    Pure (no I/O). Raises SystemExit with a descriptive message on the first
+    problem found; returns the profile unchanged on success. ``source`` is
+    included in error messages so callers can pass the originating filename.
+    """
+    if not isinstance(profile, dict):
+        raise SystemExit(
+            f"Profile {source} must contain a JSON object, got {type(profile).__name__}"
+        )
+
+    missing = [k for k in _REQUIRED_PROFILE_KEYS if k not in profile]
+    if missing:
+        raise SystemExit(
+            f"Profile {source} is missing required keys: {', '.join(missing)}. "
+            f"See car-profile-schema.md for the expected format."
+        )
+
+    for key, expected_type, subkeys in _PROFILE_SPEC:
+        value = profile[key]
+        type_label = "a list" if expected_type is list else "an object"
+        if not isinstance(value, expected_type):
+            raise SystemExit(
+                f"Profile {source}: {key} must be {type_label}, "
+                f"got {type(value).__name__}"
+            )
+        if expected_type is list:
+            for i, entry in enumerate(value):
+                if not isinstance(entry, dict):
+                    raise SystemExit(
+                        f"Profile {source}: {key}[{i}] must be an object, "
+                        f"got {type(entry).__name__}"
+                    )
+                missing_sub = [k for k in subkeys if k not in entry]
+                if missing_sub:
+                    raise SystemExit(
+                        f"Profile {source}: {key}[{i}] is missing keys: "
+                        f"{', '.join(missing_sub)}"
+                    )
+        elif subkeys:
+            missing_sub = [k for k in subkeys if k not in value]
+            if missing_sub:
+                raise SystemExit(
+                    f"Profile {source}: {key} is missing keys: {', '.join(missing_sub)}. "
+                    f"See car-profile-schema.md for the expected format."
+                )
+
+    theme = profile["dashboard"].get("theme", {})
+    if not isinstance(theme, dict):
+        raise SystemExit(
+            f"Profile {source}: dashboard.theme must be an object, "
+            f"got {type(theme).__name__}"
+        )
+    missing_theme = [k for k in _REQUIRED_THEME_KEYS if k not in theme]
+    if missing_theme:
+        raise SystemExit(
+            f"Profile {source}: dashboard.theme is missing keys: {', '.join(missing_theme)}. "
+            f"See car-profile-schema.md for the expected format."
+        )
+
+    for i, gen in enumerate(profile["generations"]):
+        gen_new_prices = gen.get("new_prices", {})
+        if not isinstance(gen_new_prices, dict):
+            raise SystemExit(
+                f"Profile {source}: generations[{i}].new_prices must be an object, "
+                f"got {type(gen_new_prices).__name__}"
+            )
+
+    spec_keys = [s["key"] for s in profile["spec_options"]]
+    dupes = sorted({k for k in spec_keys if spec_keys.count(k) > 1})
+    if dupes:
+        raise SystemExit(
+            f"Profile {source}: spec_options has duplicate keys: {', '.join(dupes)}"
+        )
+
+    return profile
 
 
 def validate_watchlist(data, source="watchlist"):

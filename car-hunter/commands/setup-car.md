@@ -1,19 +1,12 @@
 ---
 description: Set up a new car profile or update an existing one
-allowed-tools: Read, Write, Bash, AskUserQuestion
+argument-hint: "[make and model, e.g. BMW i4]"
+allowed-tools: Read, Write, Bash, Glob, WebSearch, AskUserQuestion
 ---
 
-Create or update a car profile for the car-hunter plugin. The profile configures search URLs, spec options, variant tiers, and dashboard settings for a specific make and model.
+Existing profiles: !`ls "${CLAUDE_PLUGIN_DATA}/profiles/" 2>/dev/null || echo "(none yet)"`
+Active profile: !`cat "${CLAUDE_PLUGIN_DATA}/active-profile" 2>/dev/null || echo "(not set)"`
 
-Profiles live in the plugin's persistent user-data directory (`${CLAUDE_PLUGIN_DATA}/profiles/`), which survives plugin updates and is writable on marketplace installs. The bundled read-only `${CLAUDE_PLUGIN_ROOT}` is only used to load the setup skill and the schema reference.
+Create or update a car profile using the `setup-car-profile` skill at `${CLAUDE_PLUGIN_ROOT}/skills/setup-car-profile/SKILL.md` - read it and follow it; it defines the quick-setup flow, validation, and file locations.
 
-Follow these steps:
-
-1. Read the skill file at `${CLAUDE_PLUGIN_ROOT}/skills/setup-car-profile/SKILL.md` for the full setup process.
-2. Ensure the data directory exists: `mkdir -p "${CLAUDE_PLUGIN_DATA}/profiles"`.
-3. Check `${CLAUDE_PLUGIN_DATA}/profiles/` for existing profiles.
-4. If $ARGUMENTS contains a car name, pre-populate where possible.
-5. Walk the user through the interactive setup, gathering car identity, variants, generations, spec options, search preferences, and dashboard settings.
-6. Write the completed profile to `${CLAUDE_PLUGIN_DATA}/profiles/{profile-name}.json`.
-7. Generate the spec reference file at `${CLAUDE_PLUGIN_DATA}/references/{profile-name}-specs.md`.
-8. Offer to run the first search.
+If $ARGUMENTS names a car, pre-populate from it (and if it matches an existing profile, switch to update mode for that profile). Prefer the quick setup path unless the user asks for full control.

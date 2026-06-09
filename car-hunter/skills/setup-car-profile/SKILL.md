@@ -2,160 +2,97 @@
 name: setup-car-profile
 description: >
   This skill should be used when the user asks to "set up a car search",
-  "create a car profile", "add a new car to track", "configure car hunter",
-  "set up car-hunter", "edit my car profile", "change my search preferences",
-  "update my car profile", "I want to search for a [car name]", or any
-  request to configure which car model they want to track on the used market.
-  Creates or updates a car profile JSON that configures all other car-hunter
-  skills - search, dashboard, and analysis.
-version: 1.0.0
+  "create a car profile", "add a new car to track", "track a second car",
+  "configure car hunter", "set up car-hunter", "edit my car profile",
+  "change my search preferences", "update my car profile", "I want to
+  search for a [car name]", or any request to configure which car model
+  they want to track on the used market. Creates or updates a car profile
+  JSON that configures all other car-hunter skills - search, dashboard,
+  and analysis. Supports multiple profiles (e.g. a BMW and an Audi
+  tracked side by side).
 ---
 
 # Setup Car Profile
 
-Create or update a car profile that configures the entire car-hunter plugin for a specific make and model. The profile drives the search skill, CSV schema, dashboard builder, and all analytical features.
-
-## When to Use
-
-- User wants to start tracking a new car model on the used market
-- User wants to update their search preferences (budget, location, spec priorities)
-- User wants to add a second car profile to compare
-- First-time setup of the car-hunter plugin
+Create or update a car profile that configures the entire car-hunter plugin for a specific make and model. The profile drives the search skill, CSV schema, dashboard builder, and all analytical features. Users can hold any number of profiles - one per car they are hunting.
 
 ## Profile Location
 
-Profiles are **user data**, not bundled plugin assets. They must be written to the plugin's persistent data directory, which Claude Code provides via the `${CLAUDE_PLUGIN_DATA}` environment variable:
+Profiles are **user data**, not bundled plugin assets. Write them to:
 
 ```
 ${CLAUDE_PLUGIN_DATA}/profiles/{profile-name}.json
 ```
 
-This directory:
-- Is writable (unlike `${CLAUDE_PLUGIN_ROOT}`, which is read-only on marketplace installs)
-- Persists across plugin updates
-- Is per-user and private to this plugin
-- Is created automatically the first time it is referenced
+This directory is writable, persists across plugin updates, and is per-user. **Never write profiles to `${CLAUDE_PLUGIN_ROOT}/profiles/`** - the plugin root is read-only on marketplace installs and wiped on update.
 
-**Never write profiles to `${CLAUDE_PLUGIN_ROOT}/profiles/`.** The plugin root is read-only once installed and any writes there will either fail or be lost on the next update.
+The schema is documented in `${CLAUDE_PLUGIN_ROOT}/docs/car-profile-schema.md`. Complete, valid example profiles live in `${CLAUDE_PLUGIN_ROOT}/docs/examples/` - use them as templates.
 
-The schema is documented in `${CLAUDE_PLUGIN_ROOT}/docs/car-profile-schema.md` (read-only, bundled with the plugin).
+## Quick setup (default)
 
-## Interactive Setup Process
+Most users should not face a nine-step interview. Ask only the four things that cannot be derived, using AskUserQuestion where it fits:
 
-Walk the user through the following sections. Be conversational but thorough. Use AskUserQuestion where possible to keep it structured.
+1. **The car**: make and model (e.g. "BMW i4", "Audi e-tron GT").
+2. **Budget and mileage caps**: maximum price and maximum mileage.
+3. **Location**: home postcode and how far they will travel.
+4. **Must-have options**: which extras genuinely matter to them (suggest the common ones: premium audio, panoramic roof, head-up display, adaptive suspension, performance/technology packs).
 
-### Step 1: Car Identity
+Then build the rest yourself:
 
-Gather:
-- **Make** (manufacturer): e.g. Audi, Porsche, BMW, Tesla, Mercedes
-- **Model family**: e.g. e-tron GT, Taycan, i4, Model 3, EQS
-- **Fuel type**: Electric, Petrol, Diesel, Hybrid, PHEV
+- Start from the closest bundled example in `${CLAUDE_PLUGIN_ROOT}/docs/examples/` (copy its structure, not its car-specific values, unless it IS the same car).
+- Research the car's variants, tiers, generations, and launch RRPs using your own knowledge plus WebSearch to confirm. Assign tier 0 to the base variant, ascending for performance trims, and a chart colour per variant.
+- Use the standard UK reg-date mapping from the examples (it is the same for every UK car).
+- Default the remaining search filters and dashboard settings from the example template.
+- Enable `listing_id_date_encoding` (it applies to all UK AutoTrader listings).
 
-Generate a `profile_name` slug from make + model (lowercase, hyphenated).
+Present a compact summary of what you derived (variants, tiers, RRPs per generation, spec options with weights) and ask the user to confirm or correct it **before** writing the file. RRPs matter most - flag that depreciation maths depends on them.
 
-### Step 2: Variants
+## Detailed setup (on request)
 
-Most car models have trim levels or performance variants. Gather:
-- List of variant names **as they appear on AutoTrader** (this is critical for search URLs)
-- Assign a numeric tier (0 = base, ascending for higher performance/price)
-- Assign a chart colour for each variant (offer sensible defaults based on tier)
-- Note which AutoTrader model string to use in URLs (some cars list variants as separate models, others use a single model with trim filters)
-- For each variant, note any spec options that are **standard** (e.g. air suspension standard on RS models)
+If the user wants full control, or the quick path hits a car you cannot research confidently, walk through each schema section in order: identity, variants, generations and RRPs, spec options (key, label, search_terms, weight, highlight), search preferences, search URLs, dashboard preferences. The schema doc lists every field.
 
-### Step 3: Generations
+## Writing and validating
 
-If the car has distinct generations or facelifts:
-- Name each generation (e.g. 'pre-facelift', 'facelift', 'Mk1', 'Mk2')
-- Define year ranges
-- Provide detection rules (battery size, reg plate ranges, visual identifiers)
-- Record the **new price (RRP)** for each variant in each generation. This is essential for depreciation calculations.
+1. Ensure the directory exists: `mkdir -p "${CLAUDE_PLUGIN_DATA}/profiles"`.
+2. Write the profile to `${CLAUDE_PLUGIN_DATA}/profiles/{profile-name}.json`.
+3. **Validate immediately** - schema mistakes must surface now, not days later at dashboard time:
+   ```bash
+   python3 "${CLAUDE_PLUGIN_ROOT}/scripts/build_dashboard.py" \
+     --profile "${CLAUDE_PLUGIN_DATA}/profiles/{profile-name}.json" \
+     --validate-profile
+   ```
+   If validation fails, fix the profile and re-run before telling the user it is done.
+4. Set this profile as the active one so other commands stop asking:
+   ```bash
+   echo "{profile-name}" > "${CLAUDE_PLUGIN_DATA}/active-profile"
+   ```
+5. Generate `${CLAUDE_PLUGIN_DATA}/references/{profile-name}-specs.md` with human-readable spec identification guidance derived from spec_options and search_terms.
+6. Offer to run the first search immediately.
 
-If the car has only one generation, create a single generation entry.
+## One car or many
 
-### Step 4: Spec Options
+A single profile is the simplest case: every command uses it without asking. Users comparing alternatives (any combination - two rival models, two generations of the same car, three candidates) create one profile per car:
 
-These are the optional features the user cares about tracking. For each:
-- **key**: a valid Python column name (lowercase, prefixed with `has_` or `is_`)
-- **label**: human-readable display name
-- **search_terms**: list of strings to look for in listing descriptions (case-insensitive)
-- **weight**: regression weight (default 1, premium trims/packages can be 2+)
-- **highlight**: whether this is a "must have" spec the user especially wants (shown in purple on dashboard)
+- Run this skill once per car.
+- Each profile gets its own `{profile-name}-searches/` folder and its own dashboard - they never share data, so the user can open the dashboards side by side to compare.
+- The **active profile** (`${CLAUDE_PLUGIN_DATA}/active-profile`) decides which car `/search-cars`, `/build-dashboard`, and `/car-pulse` use by default.
+- `/use-car {name}` switches the active profile; naming a car in any command's arguments overrides it for that run.
 
-Common spec options to suggest (adapt to the car):
-- Premium audio system (B&O, Harman Kardon, Burmester, Bose, etc.)
-- Massage seats
-- Air/adaptive suspension
-- Head-up display
-- Panoramic roof
-- 360-degree camera
-- Premium trim level (Vorsprung, M Sport, GTS, etc.)
-- Performance package
-- Technology package
-- Tow bar
-- Rear-axle steering
+When creating an additional profile, leave the active profile pointing at whichever car the user says they are currently focused on (ask if unclear).
 
-### Step 5: Search Preferences
+## Updating an existing profile
 
-Gather:
-- **Home postcode**: for distance calculations
-- **Location description**: human-readable (e.g. "near Daventry, Northamptonshire")
-- **Maximum budget**: default search price cap
-- **Maximum mileage**: default search mileage cap
-- **Minimum year**: earliest registration year to include
-- **Maximum distance**: miles from postcode
-- **Exclude write-offs**: Cat S/N (default: yes)
+If a profile already exists for the requested car:
 
-### Step 6: Search URLs
+1. Load it from `${CLAUDE_PLUGIN_DATA}/profiles/`.
+2. Show the user what is currently configured.
+3. Ask which sections to update, merge the changes, write back to the same path.
+4. Re-run the validation step - an edit is as capable of breaking the schema as a fresh write.
 
-Build the AutoTrader search URLs for each variant. The URL pattern is:
-```
-https://www.autotrader.co.uk/car-search?make={make}&model={model}&include-delivery-option=on&fuel-type={fuel}&postcode={postcode}&sort=price-asc&price-to={max_price}&maximum-mileage={max_mileage}&distance={max_distance}&year-from={min_year}
-```
+## Validation checklist (before writing)
 
-Also ask about additional sites to check:
-- Cazoo, Cinch, CarWow, Motorpoint (suggest these as defaults for UK searches)
-- Manufacturer approved used programme (e.g. Audi Approved Used, Porsche Approved)
-- Major dealer groups relevant to the make (Arnold Clark, Sytner, JCT600, etc.)
-
-### Step 7: Dashboard Preferences
-
-- Confirm the dark theme defaults or offer customisation
-- Set filter options for mileage and budget dropdowns
-- Set default filter values
-
-### Step 8: Listing ID Date Encoding
-
-Explain that AutoTrader listing IDs encode the advert creation date in their first 8 digits (YYYYMMDD format). This is used to calculate days on market. Confirm this applies (it does for all UK AutoTrader listings).
-
-### Step 9: Registration Date Mapping
-
-For UK cars, provide the standard reg plate to decimal date mapping. This is consistent across all UK cars and doesn't need user input, but confirm the user is searching in the UK.
-
-For non-UK markets, this section would need a different approach.
-
-## Output
-
-After gathering all information:
-
-1. Ensure the profiles directory exists. Use Bash to run `mkdir -p "${CLAUDE_PLUGIN_DATA}/profiles"` before writing. Claude Code creates `${CLAUDE_PLUGIN_DATA}` on first reference, but the `profiles/` subdirectory inside it needs to be created explicitly.
-2. Write the complete `car-profile.json` to `${CLAUDE_PLUGIN_DATA}/profiles/{profile-name}.json`
-3. Generate a `${CLAUDE_PLUGIN_DATA}/references/{profile-name}-specs.md` file with human-readable spec identification guidance (adapted from the spec_options and search_terms). This is user-generated reference material, not a bundled plugin asset, so it lives in the data directory alongside the profile.
-4. Present a summary of the profile to the user for review
-5. Offer to run the first search immediately using the new profile
-
-## Validation
-
-Before writing the profile:
-- Ensure at least one variant is defined
-- Ensure at least one generation with new prices is defined
-- Ensure spec_options keys are unique and valid Python identifiers
-- Ensure search_filters.postcode is not empty
-- Ensure at least one search URL source is configured
-
-## Updating an Existing Profile
-
-If a profile already exists for the requested car in `${CLAUDE_PLUGIN_DATA}/profiles/`:
-1. Load the existing profile from that location
-2. Show the user what's currently configured
-3. Ask which sections they want to update
-4. Merge changes and write the updated profile back to the same path
+- At least one variant; tiers are integers starting at 0.
+- At least one generation with new_prices covering every variant name.
+- spec_options keys are unique, lowercase, valid identifiers prefixed `has_` or `is_`.
+- search_filters.postcode is not empty.
+- At least one search URL source is configured.

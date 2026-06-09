@@ -40,8 +40,10 @@ from dashboard_lib import (  # noqa: E402
     row_to_features,
     safe_int_price,
     snapshot_diff,
+    validate_profile,
     validate_watchlist,
 )
+import html as _html
 import glob as _glob
 import re as _re
 
@@ -61,108 +63,7 @@ def load_profile(path):
             f"Profile {path} is not valid JSON: {exc}"
         ) from exc
 
-    _REQUIRED_KEYS = (
-        "profile_name", "display_name", "variants", "generations",
-        "spec_options", "search_filters", "dashboard",
-    )
-    _missing = [k for k in _REQUIRED_KEYS if k not in profile]
-    if _missing:
-        raise SystemExit(
-            f"Profile {path} is missing required keys: {', '.join(_missing)}. "
-            f"See car-profile-schema.md for the expected format."
-        )
-
-    # dashboard must be a dict before we can read theme from it
-    _dashboard = profile["dashboard"]
-    if not isinstance(_dashboard, dict):
-        raise SystemExit(
-            f"Profile {path}: dashboard must be an object, got {type(_dashboard).__name__}"
-        )
-
-    # dashboard.theme sub-keys
-    _REQUIRED_THEME_KEYS = ("bg", "card_bg", "card_border", "text", "text_muted")
-    _theme = _dashboard.get("theme", {})
-    if not isinstance(_theme, dict):
-        raise SystemExit(
-            f"Profile {path}: dashboard.theme must be an object, got {type(_theme).__name__}"
-        )
-    _missing_theme = [k for k in _REQUIRED_THEME_KEYS if k not in _theme]
-    if _missing_theme:
-        raise SystemExit(
-            f"Profile {path}: dashboard.theme is missing keys: {', '.join(_missing_theme)}. "
-            f"See car-profile-schema.md for the expected format."
-        )
-
-    # Variants container + per-entry shape
-    if not isinstance(profile["variants"], list):
-        raise SystemExit(
-            f"Profile {path}: variants must be a list, got {type(profile['variants']).__name__}"
-        )
-    _REQUIRED_VARIANT_KEYS = ("name", "tier", "colour")
-    for i, v in enumerate(profile["variants"]):
-        if not isinstance(v, dict):
-            raise SystemExit(
-                f"Profile {path}: variants[{i}] must be an object, got {type(v).__name__}"
-            )
-        _missing_v = [k for k in _REQUIRED_VARIANT_KEYS if k not in v]
-        if _missing_v:
-            raise SystemExit(
-                f"Profile {path}: variants[{i}] is missing keys: {', '.join(_missing_v)}"
-            )
-
-    # Spec options container + per-entry shape
-    if not isinstance(profile["spec_options"], list):
-        raise SystemExit(
-            f"Profile {path}: spec_options must be a list, got {type(profile['spec_options']).__name__}"
-        )
-    _REQUIRED_SPEC_KEYS = ("key", "label", "weight")
-    for i, s in enumerate(profile["spec_options"]):
-        if not isinstance(s, dict):
-            raise SystemExit(
-                f"Profile {path}: spec_options[{i}] must be an object, got {type(s).__name__}"
-            )
-        _missing_s = [k for k in _REQUIRED_SPEC_KEYS if k not in s]
-        if _missing_s:
-            raise SystemExit(
-                f"Profile {path}: spec_options[{i}] is missing keys: {', '.join(_missing_s)}"
-            )
-
-    # search_filters container + required keys (indexed by build_html())
-    if not isinstance(profile["search_filters"], dict):
-        raise SystemExit(
-            f"Profile {path}: search_filters must be an object, "
-            f"got {type(profile['search_filters']).__name__}"
-        )
-    _REQUIRED_FILTER_KEYS = ("max_price", "max_mileage", "max_distance", "postcode")
-    _missing_filters = [k for k in _REQUIRED_FILTER_KEYS if k not in profile["search_filters"]]
-    if _missing_filters:
-        raise SystemExit(
-            f"Profile {path}: search_filters is missing keys: {', '.join(_missing_filters)}. "
-            f"See car-profile-schema.md for the expected format."
-        )
-
-    # Generations container + per-entry shape + required keys + new_prices shape
-    if not isinstance(profile["generations"], list):
-        raise SystemExit(
-            f"Profile {path}: generations must be a list, got {type(profile['generations']).__name__}"
-        )
-    _REQUIRED_GEN_KEYS = ("name", "label", "year_from")
-    for i, gen in enumerate(profile["generations"]):
-        if not isinstance(gen, dict):
-            raise SystemExit(
-                f"Profile {path}: generations[{i}] must be an object, got {type(gen).__name__}"
-            )
-        _missing_gen = [k for k in _REQUIRED_GEN_KEYS if k not in gen]
-        if _missing_gen:
-            raise SystemExit(
-                f"Profile {path}: generations[{i}] is missing keys: {', '.join(_missing_gen)}"
-            )
-        _gen_new_prices = gen.get("new_prices", {})
-        if not isinstance(_gen_new_prices, dict):
-            raise SystemExit(
-                f"Profile {path}: generations[{i}].new_prices must be an object, "
-                f"got {type(_gen_new_prices).__name__}"
-            )
+    validate_profile(profile, source=path)
 
     variants = profile["variants"]
     generations = profile["generations"]
@@ -263,13 +164,16 @@ def _init_enrichment_fields(rows):
         row["watch_note"] = ""
 
 
-def _enrich_with_listing_ids(rows, snapshots, watchlist, lid_encoding, today):
-    """Snapshot-driven enrichment path (CSV has listing_id column).
+def enrich_rows(rows, snapshots, watchlist, lid_encoding, today):
+    """Add composite keys, AutoTrader URLs, days-on-market, price changes, watchlist stars.
 
-    Populates autotrader_url/days_on_market from encoded IDs, diffs against
-    the most recent prior snapshot for price_change, joins the watchlist,
-    and returns the SNAPSHOT_PULSE dict for Market Pulse.
+    Mutates rows in place. Populates autotrader_url/days_on_market from
+    encoded listing IDs, diffs against the most recent prior snapshot for
+    price_change, joins the watchlist, and returns the SNAPSHOT_PULSE dict
+    for Market Pulse. Rows without a listing_id keep their default
+    enrichment values.
     """
+    _init_enrichment_fields(rows)
     pulse = {"new": 0, "removed": 0, "price_drops": 0, "previous_date": None}
     rows_by_id = {r["listing_id"]: r for r in rows if r["listing_id"]}
 
@@ -288,6 +192,10 @@ def _enrich_with_listing_ids(rows, snapshots, watchlist, lid_encoding, today):
             if ld:
                 parsed += 1
                 row["days_on_market"] = (today - ld).days
+        elif row.get("url"):
+            # Non-AutoTrader sources: link straight to the captured URL so
+            # every row in the table is clickable, not just AutoTrader ones.
+            row["autotrader_url"] = row["url"]
     if attempted and parsed < attempted:
         print(
             f"WARNING: parsed {parsed}/{attempted} listing IDs as encoded dates; "
@@ -326,97 +234,6 @@ def _enrich_with_listing_ids(rows, snapshots, watchlist, lid_encoding, today):
             row["watch_note"] = entry.get("note", "") if isinstance(entry, dict) else ""
 
     return pulse
-
-
-def _enrich_with_legacy_sidecar(rows, listing_ids, price_changes, lid_encoding, today):
-    """Legacy composite-key sidecar path (CSV has no listing_id column)."""
-    for row in rows:
-        key = row["composite_key"]
-        lid = listing_ids.get(key)
-        if lid and lid_encoding.get("enabled"):
-            row["autotrader_url"] = f"https://www.autotrader.co.uk/car-details/{lid}"
-            ld = parse_listing_date(lid)
-            row["days_on_market"] = (today - ld).days if ld else None
-        row["price_change"] = price_changes.get(key, 0)
-
-
-def enrich_rows(rows, snapshots, watchlist, listing_ids, price_changes, lid_encoding, today, has_listing_ids):
-    """Add composite keys, AutoTrader URLs, days-on-market, price changes, watchlist stars.
-
-    Mutates rows in place. Returns the SNAPSHOT_PULSE summary dict used by Market Pulse.
-    Dispatches to the listing-id snapshot path or the legacy composite-key
-    sidecar path based on `has_listing_ids`.
-    """
-    _init_enrichment_fields(rows)
-    if has_listing_ids:
-        return _enrich_with_listing_ids(rows, snapshots, watchlist, lid_encoding, today)
-    _enrich_with_legacy_sidecar(rows, listing_ids, price_changes, lid_encoding, today)
-    return {"new": 0, "removed": 0, "price_drops": 0, "previous_date": None}
-
-
-def load_listing_state(explicit_path, csv_dir, profile_name, has_listing_ids):
-    """Resolve and load the listing-state sidecar JSON.
-
-    Returns (listing_ids, price_changes) dicts. Both empty if no sidecar found.
-    """
-    state_path = None
-    if explicit_path:
-        state_path = explicit_path
-    elif not has_listing_ids:
-        auto = os.path.join(csv_dir, f"{profile_name}-listing-state.json")
-        if os.path.isfile(auto):
-            state_path = auto
-
-    if not state_path:
-        return {}, {}
-
-    try:
-        with open(state_path, "r") as f:
-            state = json.load(f)
-    except FileNotFoundError as exc:
-        raise SystemExit(
-            f"Listing state file not found: {state_path}"
-        ) from exc
-    except json.JSONDecodeError as exc:
-        raise SystemExit(
-            f"Listing state file {state_path} is not valid JSON: {exc}"
-        ) from exc
-
-    if not isinstance(state, dict):
-        raise SystemExit(
-            f"Listing state file {state_path} must contain a JSON object, "
-            f"got {type(state).__name__}"
-        )
-    lids = state.get("listing_ids", {})
-    prices = state.get("price_changes", {})
-    if not isinstance(lids, dict):
-        raise SystemExit(
-            f"Listing state file {state_path}: 'listing_ids' must be an object, "
-            f"got {type(lids).__name__}"
-        )
-    if not isinstance(prices, dict):
-        raise SystemExit(
-            f"Listing state file {state_path}: 'price_changes' must be an object, "
-            f"got {type(prices).__name__}"
-        )
-    for k, v in lids.items():
-        if not isinstance(k, str) or not isinstance(v, str):
-            raise SystemExit(
-                f"Listing state file {state_path}: 'listing_ids' entries must map "
-                f"string keys to string values, got {k!r}: {v!r}"
-            )
-    for k, v in prices.items():
-        if not isinstance(k, str) or not isinstance(v, (int, float)):
-            raise SystemExit(
-                f"Listing state file {state_path}: 'price_changes' entries must map "
-                f"string keys to numeric values, got {k!r}: {v!r}"
-            )
-
-    print(
-        f"Loaded listing state from {state_path}: "
-        f"{len(lids)} listing IDs, {len(prices)} price changes"
-    )
-    return lids, prices
 
 
 _SNAPSHOT_DATE_RE = _re.compile(r"-(\d{4}-\d{2}-\d{2})\.csv$")
@@ -591,8 +408,16 @@ def load_snapshots(csv_dir, profile_name):
 
 
 def load_csv(path, spec_options):
-    """Load and validate listings from a CSV file, returning a list of row dicts."""
+    """Load listings from a CSV file.
+
+    Returns (rows, skipped) where skipped is a list of human-readable
+    reasons for rows that could not be parsed. A missing file or missing
+    required columns is still fatal (the data is unusable), but individual
+    bad rows are skipped and reported rather than aborting the whole build -
+    one mangled price cell should not cost the user the day's dashboard.
+    """
     rows = []
+    skipped = []
     try:
         f = open(path, "r")
     except FileNotFoundError as exc:
@@ -612,44 +437,59 @@ def load_csv(path, spec_options):
                 f"CSV {path} is missing required columns: {', '.join(sorted(_missing_cols))}"
             )
         for _row_num, r in enumerate(reader, start=1):
+            price = safe_int_price(r.get("price"))
+            mileage = safe_int_price(r.get("mileage"))
+            problems = []
+            if price is None:
+                problems.append(f"price {r.get('price')!r}")
+            if mileage is None:
+                problems.append(f"mileage {r.get('mileage')!r}")
             try:
-                row = {
-                    "listing_id": r.get("listing_id", "") or "",
-                    "variant": r["variant"],
-                    "generation": r.get("generation", ""),
-                    "price": int(r["price"]),
-                    "year": int(r["year"]),
-                    "reg": r.get("reg", ""),
-                    "reg_date": float(r.get("reg_date", 0) or 0),
-                    "age_years": float(r.get("age_years", 0) or 0),
-                    "age_months": round(float(r.get("age_years", 0) or 0) * 12, 1),
-                    "mileage": int(r["mileage"]),
-                    "new_price": int(r.get("new_price", 0) or 0),
-                    "depreciation_total": int(r.get("depreciation_total", 0) or 0),
-                    "depreciation_pa": int(r.get("depreciation_pa", 0) or 0),
-                    "location": r.get("location", ""),
-                    "is_brand_new_stock": r.get("is_brand_new_stock", "False") == "True",
-                }
-            except (ValueError, KeyError) as exc:
-                raise SystemExit(
-                    f"CSV row {_row_num}: cannot parse field - {exc}"
-                ) from exc
+                year = int(r["year"])
+            except (ValueError, KeyError, TypeError):
+                problems.append(f"year {r.get('year')!r}")
+                year = None
+            try:
+                age_years = float(r.get("age_years", 0) or 0)
+                reg_date = float(r.get("reg_date", 0) or 0)
+            except ValueError:
+                problems.append(f"age_years/reg_date {r.get('age_years')!r}")
+                age_years = reg_date = None
+            if problems:
+                reason = f"row {_row_num}: unparseable {', '.join(problems)}"
+                print(f"WARNING: skipping CSV {reason}")
+                skipped.append(reason)
+                continue
+
+            row = {
+                "listing_id": r.get("listing_id", "") or "",
+                "variant": r.get("variant", "") or "",
+                "generation": r.get("generation", ""),
+                "price": price,
+                "year": year,
+                "reg": r.get("reg", ""),
+                "reg_date": reg_date,
+                "age_years": age_years,
+                "age_months": round(age_years * 12, 1),
+                "mileage": mileage,
+                "new_price": safe_int_price(r.get("new_price")) or 0,
+                "depreciation_total": safe_int_price(r.get("depreciation_total")) or 0,
+                "depreciation_pa": safe_int_price(r.get("depreciation_pa")) or 0,
+                "location": r.get("location", ""),
+                "url": r.get("url", "") or "",
+                "is_brand_new_stock": r.get("is_brand_new_stock", "False") == "True",
+            }
 
             for spec in spec_options:
                 key = spec["key"]
                 row[key] = r.get(key, "False") == "True"
 
-            try:
-                row["options_count"] = int(r.get("options_count", 0) or 0)
-            except ValueError as exc:
-                raise SystemExit(
-                    f"CSV row {_row_num}: cannot parse field 'options_count' - {exc}"
-                ) from exc
+            row["options_count"] = safe_int_price(r.get("options_count")) or 0
 
             row["retained_pct"] = _retained_pct(row["price"], row["new_price"])
 
             rows.append(row)
-    return rows
+    return rows, skipped
 
 
 def build_html(
@@ -673,13 +513,16 @@ def build_html(
     r_squared,
     today_str,
     reg_count,
-    regression_warning,
+    warnings,
     template_path=None,
+    profile_name="",
 ):
     """Render the dashboard HTML from explicit keyword arguments.
 
     `reg_count` is the number of used listings fed into the regression (only
     the count is needed by the template, not the full row list).
+    `warnings` is a list of human-readable data-quality warning strings
+    rendered as a banner at the top of the dashboard.
     `template_path` overrides the default template location, used by tests.
     """
 
@@ -692,15 +535,17 @@ def build_html(
     text_colour = theme["text"]
     text_muted = theme["text_muted"]
 
+    esc = _html.escape
+
     # Build variant filter options
     variant_options_html = '<option value="all">All variants</option>'
     for v in VARIANTS:
-        variant_options_html += f'\n                <option value="{v["name"]}">{v["name"]}</option>'
+        variant_options_html += f'\n                <option value="{esc(v["name"], quote=True)}">{esc(v["name"])}</option>'
 
     # Build generation filter options
     gen_options_html = '<option value="all">All</option>'
     for g in GENERATIONS:
-        gen_options_html += f'\n                <option value="{g["name"]}">{g["label"]}</option>'
+        gen_options_html += f'\n                <option value="{esc(g["name"], quote=True)}">{esc(g["label"])}</option>'
 
     # Build mileage filter options
     mileage_options_html = '<option value="999999">Any</option>'
@@ -718,13 +563,16 @@ def build_html(
     criteria_text = (
         f"Max &pound;{SEARCH_FILTERS['max_price']:,} &bull; "
         f"Under {SEARCH_FILTERS['max_mileage']:,} miles &bull; "
-        f"Within {SEARCH_FILTERS['max_distance']} miles of {SEARCH_FILTERS['postcode']}"
+        f"Within {esc(str(SEARCH_FILTERS['max_distance']))} miles of {esc(str(SEARCH_FILTERS['postcode']))}"
     )
     if SEARCH_FILTERS.get("exclude_write_offs"):
         criteria_text += " &bull; Exclude Cat S/N"
 
     # Preferred spec text
-    preferred_text = " &bull; ".join(highlight_specs) if highlight_specs else "No specific preferences set"
+    preferred_text = (
+        " &bull; ".join(esc(s) for s in highlight_specs)
+        if highlight_specs else "No specific preferences set"
+    )
 
     # Generation filter JS logic
     gen_filter_js = "true"  # Default: pass everything
@@ -763,8 +611,13 @@ def build_html(
             f"Cannot read dashboard template {template_path}: {exc}"
         ) from exc
     try:
+        warning_html = "".join(
+            f'<div class="regression-warning"><strong>Data warning</strong>{esc(w)}</div>'
+            for w in warnings
+        )
         html = _template.substitute(
-            DISPLAY_NAME=DISPLAY_NAME,
+            DISPLAY_NAME=esc(DISPLAY_NAME),
+            profile_name=js_safe(profile_name),
             bg=bg,
             card_bg=card_bg,
             card_border=card_border,
@@ -783,10 +636,7 @@ def build_html(
             capture_label=CAPTURE_BADGE["label"],
             table_count=len(table_data),
             reg_count=reg_count,
-            regression_warning_html=(
-                f'<div class="regression-warning"><strong>Regression warning</strong>{regression_warning}</div>'
-                if regression_warning else ""
-            ),
+            regression_warning_html=warning_html,
             all_data_json=js_safe(table_data),
             dep_curves_json=js_safe(dep_curves),
             spec_premiums_json=js_safe(spec_premiums),
@@ -813,22 +663,45 @@ def build_html(
 def main():
     # ── Argument parsing ────────────────────────────────────────────────
 
+    """Main."""
     parser = argparse.ArgumentParser(description="Build car value dashboard from profile and CSV data")
     parser.add_argument("--profile", required=True, help="Path to car-profile.json")
-    parser.add_argument("--csv", required=True, help="Path to CSV data file")
+    parser.add_argument("--csv", default=None, help="Path to CSV data file")
     parser.add_argument("--output", default=None, help="Output HTML path (default: auto-generated)")
-    parser.add_argument("--date", default=None, help="Override today's date (YYYY-MM-DD)")
     parser.add_argument(
-        "--listing-state",
+        "--date",
         default=None,
-        help="Path to a JSON file with listing_ids and price_changes dictionaries. "
-        "If omitted, auto-detects {profile_name}-listing-state.json next to the CSV.",
+        help="Override the build date (YYYY-MM-DD). Defaults to the date in the "
+        "CSV filename so snapshot diffing works when the dashboard is rebuilt "
+        "after the search day; falls back to today.",
+    )
+    parser.add_argument(
+        "--summary-json",
+        default=None,
+        help="Also write a machine-readable run summary (key findings, top deals, "
+        "warnings) to this path.",
+    )
+    parser.add_argument(
+        "--validate-profile",
+        action="store_true",
+        help="Validate the profile JSON and exit without building. Use after "
+        "/setup-car so schema mistakes surface immediately.",
     )
     args = parser.parse_args()
 
     # ── Load profile ────────────────────────────────────────────────────
 
     profile_ctx = load_profile(args.profile)
+
+    if args.validate_profile:
+        print(f"Profile {args.profile} is valid: {profile_ctx['display_name']} "
+              f"({len(profile_ctx['variants'])} variants, "
+              f"{len(profile_ctx['generations'])} generations, "
+              f"{len(profile_ctx['spec_options'])} spec options)")
+        return
+
+    if not args.csv:
+        parser.error("--csv is required unless --validate-profile is used")
     PROFILE_NAME = profile_ctx["profile_name"]
     DISPLAY_NAME = profile_ctx["display_name"]
     VARIANTS = profile_ctx["variants"]
@@ -843,7 +716,10 @@ def main():
     csv_dir = os.path.dirname(os.path.abspath(args.csv))
     OUTPUT_PATH = args.output or os.path.join(csv_dir, f"{PROFILE_NAME}-dashboard.html")
 
-    # Today's date
+    # Build date. Snapshot diffing and the capture badge are keyed to the
+    # search date, so when the dashboard is rebuilt a day or two later the
+    # date embedded in the CSV filename is the right anchor - not the wall
+    # clock. Priority: --date flag > CSV filename tag > today.
     if args.date:
         try:
             today = date.fromisoformat(args.date)
@@ -852,7 +728,12 @@ def main():
                 f"--date must be YYYY-MM-DD (got {args.date!r}): {exc}"
             ) from exc
     else:
-        today = date.today()
+        match = _SNAPSHOT_DATE_RE.search(os.path.basename(args.csv))
+        if match:
+            today = date.fromisoformat(match.group(1))
+            print(f"Using CSV snapshot date {today.isoformat()} as build date")
+        else:
+            today = date.today()
 
     today_str = today.strftime("%d %B %Y")
 
@@ -863,11 +744,9 @@ def main():
 
     # ── Load and parse CSV ──────────────────────────────────────────────
 
-    rows = load_csv(args.csv, SPEC_OPTIONS)
+    rows, skipped_rows = load_csv(args.csv, SPEC_OPTIONS)
 
     print(f"Loaded {len(rows)} listings")
-
-    has_listing_ids = any(r["listing_id"] for r in rows)
 
     # ── Glob dated snapshot CSVs for cross-run analysis ─────────────────
     # Scans the CSV directory for sibling snapshot files named
@@ -886,18 +765,9 @@ def main():
     # ── Watchlist ───────────────────────────────────────────────────────
     WATCHLIST = load_watchlist(csv_dir, PROFILE_NAME)
 
-    # ── Listing IDs and price changes ───────────────────────────────────
-
-    LISTING_IDS, PRICE_CHANGES = load_listing_state(
-        args.listing_state, csv_dir, PROFILE_NAME, has_listing_ids
-    )
-
     # ── Composite keys, snapshot diffing, listing tracking ─────────────
 
-    SNAPSHOT_PULSE = enrich_rows(
-        rows, SNAPSHOTS, WATCHLIST, LISTING_IDS, PRICE_CHANGES,
-        LID_ENCODING, today, has_listing_ids,
-    )
+    SNAPSHOT_PULSE = enrich_rows(rows, SNAPSHOTS, WATCHLIST, LID_ENCODING, today)
 
     # ── Rolling 28-day time series ──────────────────────────────────────
     TIME_SERIES = build_time_series(SNAPSHOTS, today, days=28)
@@ -919,6 +789,16 @@ def main():
     # price = b0 + b1*age_months + b2*mileage + b3*spec_score + b4*tier_1 + b5*tier_2 + ...
 
     coeffs, r_squared, reg_data, regression_warning = run_regression(rows, VARIANT_BY_NAME, tier_features)
+
+    warnings = []
+    if skipped_rows:
+        warnings.append(
+            f"{len(skipped_rows)} CSV row(s) could not be parsed and were "
+            f"excluded: {'; '.join(skipped_rows[:3])}"
+            + (" (and more)" if len(skipped_rows) > 3 else "")
+        )
+    if regression_warning:
+        warnings.append(regression_warning)
 
     # ── Spec premium calculation ────────────────────────────────────────
 
@@ -984,7 +864,8 @@ def main():
         r_squared=r_squared,
         today_str=today_str,
         reg_count=len(reg_data),
-        regression_warning=regression_warning,
+        warnings=warnings,
+        profile_name=PROFILE_NAME,
     )
 
     with open(OUTPUT_PATH, 'w') as f:
@@ -993,6 +874,48 @@ def main():
     file_size = os.path.getsize(OUTPUT_PATH)
     print(f"\nDashboard written to {OUTPUT_PATH}")
     print(f"File size: {file_size:,} bytes ({file_size // 1024} KB)")
+
+    # ── Machine-readable run summary ────────────────────────────────────
+    # Lets the dashboard skill present key findings from structured data
+    # instead of re-parsing stdout.
+
+    if args.summary_json:
+        top_deals = sorted(
+            (r for r in table_data if r["predicted"] > 0),
+            key=lambda r: r["deviation_pct"],
+        )[:5]
+        summary = {
+            "profile": PROFILE_NAME,
+            "display_name": DISPLAY_NAME,
+            "date": today.isoformat(),
+            "dashboard_path": OUTPUT_PATH,
+            "listings": len(table_data),
+            "regression": {"r_squared": round(r_squared, 4), "rows": len(reg_data)},
+            "top_deals": [
+                {
+                    "listing_id": r["listing_id"],
+                    "variant": r["variant"],
+                    "year": r["year"],
+                    "price": r["price"],
+                    "predicted": r["predicted"],
+                    "deviation": r["deviation"],
+                    "deviation_pct": r["deviation_pct"],
+                    "mileage": r["mileage"],
+                    "location": r["location"],
+                }
+                for r in top_deals
+            ],
+            "spec_premiums": spec_premiums,
+            "flattening_points": {
+                v: d["flatten_month"] for v, d in dep_curves.items()
+            },
+            "pulse": SNAPSHOT_PULSE,
+            "capture": {"status": CAPTURE_BADGE["status"], "label": CAPTURE_BADGE["label"]},
+            "warnings": warnings,
+        }
+        with open(args.summary_json, "w") as sf:
+            json.dump(summary, sf, indent=2)
+        print(f"Run summary written to {args.summary_json}")
 
 
 if __name__ == '__main__':

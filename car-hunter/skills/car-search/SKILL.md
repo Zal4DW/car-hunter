@@ -7,8 +7,8 @@ description: >
   "check for new listings", "any new cars today", "refresh the car search",
   or any request related to searching for used cars currently listed for
   sale in the UK. Config-driven: reads a car profile to determine what
-  to search for.
-version: 1.0.0
+  to search for, captures raw listings, and hands all derived maths to a
+  bundled Python ingest script.
 context: fork
 allowed-tools:
   - Read
@@ -22,209 +22,106 @@ allowed-tools:
 
 # Car Search
 
-Search UK car listing websites for used cars matching an active car profile. Compile results into a detailed, cited markdown table with key specifications and distance from the user's home postcode.
+Search UK car listing websites for used cars matching a car profile. Your job is **extraction only**: capture what each listing page says into a raw JSON file, then run the bundled ingest script which computes every derived field (ages, depreciation, listing ids, deduplication) and writes the CSV. Never hand-compute derived fields or hand-format CSV rows.
 
 ## Prerequisites
 
-This skill requires an active car profile in `${CLAUDE_PLUGIN_DATA}/profiles/`. Profiles are user-created and live in the plugin's persistent data directory, not in the plugin install. If no profile exists, direct the user to the `setup-car-profile` skill first.
+An active car profile in `${CLAUDE_PLUGIN_DATA}/profiles/`. If none exists, direct the user to the `setup-car-profile` skill first.
 
 ## Loading the Profile
 
-1. Check `${CLAUDE_PLUGIN_DATA}/profiles/` for available `.json` profile files. If the directory does not exist yet, no profiles have been created - run `setup-car-profile` first.
-2. If multiple profiles exist, ask the user which car they want to search for
-3. Load the selected `car-profile.json` and use it to configure the entire search
+1. If the user named a car, match it against profiles in `${CLAUDE_PLUGIN_DATA}/profiles/` (by `profile_name`, `display_name`, or `make`).
+2. Otherwise use the active profile named in `${CLAUDE_PLUGIN_DATA}/active-profile`.
+3. Otherwise, if exactly one profile exists, use it; if several, ask the user.
 
-All subsequent instructions reference profile fields. For example, `profile.search_filters.max_price` means the `max_price` value from the `search_filters` section of the loaded profile.
+All subsequent instructions reference profile fields, e.g. `profile.search_filters.max_price`.
 
 ## Default Filters (from profile)
 
-Unless the user specifies otherwise, apply these filters from the profile:
-
-- **Max price:** `profile.search_filters.max_price`
-- **Max mileage:** `profile.search_filters.max_mileage`
-- **Min year:** `profile.search_filters.min_year`
-- **Max distance:** `profile.search_filters.max_distance` miles from `profile.search_filters.postcode`
-- **Exclude write-offs:** `profile.search_filters.exclude_write_offs`
-
-If the user provides different filter values, use those instead.
+Apply `profile.search_filters` (max_price, max_mileage, min_year, max_distance from postcode, exclude_write_offs) unless the user specifies otherwise in their request.
 
 ## Search Process
 
 ### Step 1: Build search URLs from profile
 
-For each variant in `profile.variants`, construct the AutoTrader search URL:
-
-```
-{profile.search_urls.autotrader.base}?make={profile.make}&model={variant.autotrader_model}&{profile.search_urls.autotrader.params}&postcode={profile.search_filters.postcode}&price-to={profile.search_filters.max_price}&maximum-mileage={profile.search_filters.max_mileage}&distance={profile.search_filters.max_distance}&year-from={profile.search_filters.min_year}
-```
-
-Also construct URLs for each entry in `profile.search_urls.additional_sites` and `profile.search_urls.dealer_groups`, applying the user's filter parameters where the URL supports them.
+For each variant in `profile.variants`, construct the AutoTrader search URL from `profile.search_urls.autotrader.base` + `params` + the variant's `autotrader_model` + the active filters. Also construct URLs for each entry in `profile.search_urls.additional_sites` and `dealer_groups`.
 
 ### Step 2: Browser-based search (preferred)
 
-Use Claude in Chrome browser tools to navigate directly to each constructed URL. WebFetch is blocked for most car listing sites, so the browser is the primary method.
+Use Claude in Chrome browser tools to navigate to each URL. WebFetch is blocked for most car listing sites, so the browser is the primary method. Search each variant separately on AutoTrader (many cars list variants as different models). Fall back to WebSearch (`site:autotrader.co.uk {make} {variant} for sale`) only if the browser is unavailable.
 
-Search each variant separately on AutoTrader (many cars list variants as different models).
+### Step 3: Paginate exhaustively
 
-Then check each additional site and dealer group from the profile.
-
-### Step 3: WebSearch fallback
-
-If the browser is unavailable, use WebSearch as a fallback:
-
-- Search `site:autotrader.co.uk {profile.make} {variant.name} for sale`
-- Search each additional site: `site:{domain} {profile.make} {model}`
-- Search `{profile.display_name} for sale UK {current_year}` for broader results
+For each source, follow `?page=N` (or the site's equivalent) until a page returns zero new listings. On AutoTrader, read the pagination footer ("Page 1 of 4") to know the expected count. Track per source: `name`, `url`, `expected_pages`, `captured_pages`, and `status` (`ok` / `partial` / `failed`). A missed page today looks like a "sold" car tomorrow.
 
 ### Step 4: Individual listing details
 
-For promising listings, navigate to the individual listing page in the browser to extract full details. On AutoTrader, click "View all spec and features" (it is a `<button>` element, not a link) to see the full equipment list.
+For each listing, open the page and extract the raw data points below. On AutoTrader, click "View all spec and features" (a `<button>`, not a link) to see the full equipment list. Match `profile.spec_options[].search_terms` case-insensitively against the description and spec list. Check `variant.standard_specs` - those specs are present even when the listing is silent.
 
-Use the `profile.spec_options[].search_terms` to identify which optional features each listing has. Match terms case-insensitively against the listing description and spec list.
+## Data to Extract (raw, per listing)
 
-### Step 5: Deduplication
+- `url` - the full listing URL (this is what the ingest script derives the stable id from)
+- `source` - platform name (AutoTrader, Cinch, dealer name...)
+- `variant` - matched against `profile.variants[].name` exactly
+- `price` - as shown, raw text is fine ("£42,995")
+- `year` - registration year
+- `reg` - UK reg plate code if shown (e.g. "74")
+- `mileage` - as shown, raw text is fine ("12,400 miles")
+- `colour`, `location` - dealer town/city
+- `specs` - list of `profile.spec_options[].key` values whose search terms matched
+- `is_brand_new_stock` - true for unregistered/delivery-miles stock
 
-Many cars appear on multiple platforms. Deduplicate by matching on price + year + mileage + dealer location. When a duplicate is found, link to both sources but count it as one listing.
+Mark spec options "not stated" by simply omitting them; never guess.
 
-## Capture completeness
+## Write the raw capture JSON
 
-The dashboard now diffs snapshots automatically. For the diff to be meaningful, each search run must be exhaustive and must record what was actually captured - otherwise a missed page on one day looks like a "sold" car on the next.
-
-### Paginate exhaustively
-
-For each source URL, follow `?page=N` (or the site's equivalent) until a page returns zero new listings. Do not stop at the first page. On AutoTrader, read the pagination footer ("Page 1 of 4") to know the expected count.
-
-### Record every source touched
-
-For each source, track:
-
-- `name` - short label (AutoTrader, Cazoo, Cinch, dealer group name)
-- `url` - the base URL template used
-- `expected_pages` - page count from the pagination footer
-- `captured_pages` - how many pages you actually walked
-- `status` - one of `ok` (all pages walked cleanly), `partial` (some pages skipped, timed out, or errored), `failed` (source unreachable)
-
-### Write a capture manifest
-
-Save a JSON manifest alongside the CSV at `{profile.profile_name}-searches/{profile.profile_name}-capture-{YYYY-MM-DD}.json`:
+Save everything to `{profile.profile_name}-searches/{profile.profile_name}-raw-capture-{YYYY-MM-DD}.json` in the user's workspace (create the folder if needed):
 
 ```json
 {
+  "captured": "YYYY-MM-DD",
   "sources": [
-    {"name": "AutoTrader", "url": "...", "expected_pages": 4, "captured_pages": 4, "status": "ok"},
-    {"name": "Cazoo",      "url": "...", "expected_pages": 3, "captured_pages": 2, "status": "partial"}
+    {"name": "AutoTrader", "url": "...", "expected_pages": 4, "captured_pages": 4, "status": "ok"}
   ],
-  "total_captured": 37
+  "listings": [
+    {"url": "...", "source": "AutoTrader", "variant": "...", "price": "£42,995",
+     "year": 2024, "reg": "74", "mileage": "12,400 miles", "colour": "Blue",
+     "location": "Leeds", "specs": ["has_pano"], "is_brand_new_stock": false}
+  ]
 }
 ```
 
-The dashboard builder reads this file and renders a capture badge (green / amber / red) in the header so anyone viewing the dashboard knows whether the day's counts are trustworthy.
+**Write this file even when a source fails completely** - a red capture badge is informative; a missing one is ambiguous. Record every source you attempted with its status.
 
-## Data Points to Extract
+## Run the ingest script
 
-For each listing, capture:
-
-- **Price** (asking price in GBP)
-- **Model variant** (match against `profile.variants[].name`)
-- **Generation** (match against `profile.generations[]` using detection rules)
-- **Year** of registration
-- **Mileage** in miles
-- **Colour**
-- **Location** (dealer town/city)
-- **Distance from postcode** (estimate based on dealer location vs `profile.search_filters.postcode`)
-- **Each spec option** from `profile.spec_options[]`: Yes / No / Not stated
-- **Source** (which platform, with direct link to the listing)
-
-For spec options where a variant has the spec as standard (listed in `variant.standard_specs`), mark as "Yes (standard)" rather than checking the listing text.
-
-## Distance Estimation
-
-The user's home postcode is `profile.search_filters.postcode` (`profile.search_filters.location_description`). When searching on AutoTrader with the postcode parameter, distances are shown in the results. For other platforms, estimate driving distance using general UK geography knowledge. Present as approximate miles, e.g. "~45 miles".
-
-## Output File
-
-After compiling results, save the full report as a markdown file.
-
-**Path:** Save to a `{profile.profile_name}-searches/` folder within the user's workspace. Use the naming pattern `{profile.profile_name}-search-{YYYY-MM-DD}.md`. If a file for today's date already exists, overwrite it. Always present the results in the conversation as well as saving the file.
-
-## Output Format
-
-Present results as a markdown table sorted by price (lowest first), grouped by variant. Build the table columns dynamically from the profile:
-
-Fixed columns: `#`, `Price`, `Year`, `Mileage`, `Colour`, `Location (dist.)`, `Days Listed`
-
-Dynamic columns: one column per `profile.spec_options[]` where `highlight` is true (use short labels).
-
-Final column: `Key Options` (remaining non-highlighted specs), `Listing` (clickable links).
-
-```
-| # | Price | Year | Mileage | Colour | Location (dist.) | Days Listed | {highlight_spec_1} | {highlight_spec_2} | Key Options | Listing |
+```bash
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/ingest_listings.py" \
+  --profile "${CLAUDE_PLUGIN_DATA}/profiles/{profile_name}.json" \
+  --capture "{profile_name}-searches/{profile_name}-raw-capture-{YYYY-MM-DD}.json"
 ```
 
-**IMPORTANT:** The Listing column MUST contain clickable markdown hyperlinks to the actual listing page. Format as `[Platform name](full URL)`. If a car appears on multiple platforms, include all links separated by a comma.
+The script computes listing ids, registration dates, ages, depreciation, generation detection, and options counts; collapses cross-source duplicates (preferring the canonical AutoTrader id); and writes the dated CSV plus the capture manifest next to the capture file. Read its output: it names any skipped listings with reasons - re-check those pages or correct the capture JSON and re-run rather than leaving rows behind silently.
 
-After the table, include:
+## Markdown report
 
-- **Total listings found** across all sources (after deduplication)
-- **Date of search** (today's date)
-- **Sources checked** with links and result counts
-- **Standout finds** -- highlight the best value, closest to home, lowest mileage, and highest spec options
-- Any listings where key details could not be confirmed, flagged clearly
+After ingesting, present the results in the conversation AND save a report to `{profile_name}-searches/{profile_name}-search-{YYYY-MM-DD}.md` (overwrite same-day files). Build it from the ingested CSV, sorted by price ascending, grouped by variant:
 
-## Listing Tracking and Volatility Analysis
+```
+| # | Price | Year | Mileage | Colour | Location (dist.) | Days Listed | {highlight specs...} | Key Options | Listing |
+```
 
-Each search creates a dated snapshot. Over time, these snapshots enable market analysis.
+- One column per `profile.spec_options[]` where `highlight` is true; remaining specs go in Key Options.
+- The Listing column MUST contain clickable markdown links to the actual listing pages.
+- Estimate distances from `profile.search_filters.postcode` (AutoTrader shows them directly).
 
-### First Listed Date
-
-If `profile.listing_id_date_encoding.enabled` is true:
-
-For AutoTrader listings, extract the first 8 digits of the listing ID from the URL (e.g. `/car-details/202602179980029` -> `20260217` -> 17 Feb 2026) and record as the **First Listed** date. Calculate **Days on Market** as today's date minus the first listed date.
-
-For Cazoo listings, the search results page shows "Added X days ago" text for some listings. Extract this where available.
-
-For listings on other platforms without date encoding, check previous search reports to determine when the listing was first observed.
-
-### Volatility Metrics
-
-Volatility analysis is now handled automatically by the dashboard builder. As long as every snapshot CSV carries a `listing_id` column, the builder diffs the latest snapshot against the previous dated CSV in the same folder and computes new arrivals, removed listings, and price changes itself. You no longer need to hand-maintain a `{profile}-listing-state.json` sidecar or recalculate deltas in the search report.
-
-## CSV Data Collection
-
-After presenting the search results, also compile the data into a CSV file for the dashboard builder. The CSV columns are:
-
-Fixed: `listing_id`, `variant`, `generation`, `price`, `year`, `reg`, `reg_date`, `age_years`, `mileage`, `new_price`, `depreciation_total`, `depreciation_pa`, `depreciation_pct`
-
-### `listing_id` (stable cross-run identifier)
-
-This is the **first** column and is what lets the dashboard match the same car across successive searches. Populate it as follows:
-
-- **AutoTrader:** the 15-digit numeric id after `/car-details/` in the listing URL (e.g. `https://www.autotrader.co.uk/car-details/202602179980029` -> `202602179980029`). The first 8 digits double as the first-listed date.
-- **Other sources:** use `{source}:{12-char sha1 of the listing URL}` so the id is stable if you re-scrape the same listing. Never invent composite keys from price + location - they move when the dealer drops the price.
-
-Leave the column empty only as a last resort. An empty `listing_id` opts that row out of the snapshot diff and the watchlist.
-
-Dynamic (from profile.spec_options): one boolean column per spec option using the `key` field (e.g. `has_bo`, `has_massage`)
-
-Fixed: `options_count`, `location`, `is_brand_new_stock`
-
-### Calculating derived fields:
-
-- `reg_date`: look up `profile.reg_date_mapping[reg_code]`
-- `age_years`: current decimal date minus `reg_date`
-- `new_price`: look up `profile.generations[matching_gen].new_prices[variant_name]`
-- `depreciation_total`: `new_price - price`
-- `depreciation_pa`: `depreciation_total / age_years` (N/A if age < 0.5 years)
-- `depreciation_pct`: `(depreciation_total / new_price) * 100`
-- `options_count`: count of True spec option columns
-
-Save as: `{profile.profile_name}-searches/{profile.profile_name}-all-listings-{YYYY-MM-DD}.csv`
+After the table include: total listings after deduplication, sources checked with result counts, standout finds (best value, closest, lowest mileage, highest spec), and any listings with unconfirmed details flagged clearly.
 
 ## Important Notes
 
-- Only include cars genuinely for sale (not sold, reserved, or deposit taken)
-- Exclude Cat S/N write-offs unless the user specifically requests them
-- For spec options, mark "Not stated" rather than assuming absent if the listing is silent
-- Check `variant.standard_specs` before marking a spec as not present -- some specs are standard on certain variants
-- Many dealers cross-list on multiple platforms. Always deduplicate.
-- Use UK English throughout (organisation, colour, analyse, etc.)
+- Only include cars genuinely for sale (not sold, reserved, or deposit taken).
+- Exclude Cat S/N write-offs unless the user requests them.
+- Variants must match `profile.variants[].name` exactly - the ingest script warns on unknown variants.
+- Deduplication is handled by the ingest script; just capture everything you see, including apparent cross-site duplicates.
+- After the search, suggest `/build-dashboard` to refresh the analysis, or `/car-pulse` for a quick what-changed digest.
+- Use UK English throughout (organisation, colour, analyse, etc.).
