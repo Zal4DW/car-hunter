@@ -363,3 +363,41 @@ class TestEmbeddedJsonBlocks:
         for v in loaded_profile["variants"]:
             assert v["name"] in colours, f"variant {v['name']} missing from colours"
             assert colours[v["name"]] == v["colour"]
+
+
+class TestCurrencyAndArrowGlyphs:
+    """The template embeds currency/trend glyphs as literal characters, not
+    as JS escape sequences. A double-backslash (`\\\\u00a3`) regression would
+    print the raw `\\u00a3` text in the browser instead of decoding to `£`.
+    """
+
+    def test_no_double_escaped_glyphs_leak(self, built_html: str):
+        """No `\\\\uXXXX` double-escape leaks into the rendered output."""
+        for seq in ("\\\\u00a3", "\\\\u2191", "\\\\u2193"):
+            assert seq not in built_html, (
+                f"double-escaped glyph {seq!r} leaked - it would print as "
+                f"literal text instead of the real character"
+            )
+
+    def test_real_glyphs_present(self, built_html: str):
+        """The genuine currency and trend characters are present."""
+        assert "£" in built_html
+        for arrow in ("↑", "↓"):
+            assert arrow in built_html, f"trend arrow {arrow!r} missing"
+
+
+class TestRowListingLinks:
+    """Each table row must be clickable through to its AutoTrader ad. The
+    variant cell (always populated) carries the link via `buildLinkedCell`.
+    """
+
+    def test_variant_cell_is_linked(self, built_html: str):
+        """The variant cell is rendered as a link, not plain text."""
+        assert "buildLinkedCell(r, r.variant)" in built_html, (
+            "variant cell is no longer wired to the listing link helper"
+        )
+
+    def test_link_helper_targets_autotrader_url(self, built_html: str):
+        """The link helper points the anchor at the row's autotrader_url."""
+        assert "a.setAttribute('href', r.autotrader_url)" in built_html
+        assert "a.className = 'listing-link'" in built_html
